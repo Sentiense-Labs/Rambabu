@@ -1,29 +1,34 @@
-// Client-side JavaScript for AI RC Car Dashboard
+// Simple Motor Control for AI RC Car
 
 // API base URL
 const API_BASE = '';
 
 // State
 let connectionStatus = 'connecting';
-let retryCount = 0;
+let joystickActive = false;
+let joystickInterval = null;
+let currentSteeringDirection = 'center'; // Track current steering state
 
 // DOM elements
-const videoFeed = document.getElementById('video-feed');
-const videoLoader = document.getElementById('video-loader');
 const statusIndicator = document.getElementById('status-indicator');
 const statusText = document.getElementById('status-text');
-const voiceInput = document.getElementById('voice-input');
+const joystickBase = document.getElementById('joystick-base');
+const joystickHandle = document.getElementById('joystick-handle');
+
+// Joystick state
+let joystickCenter = { x: 0, y: 0 };
+let joystickMaxRadius = 50;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     initEventListeners();
+    initJoystick();
     testConnection();
-    initVideoFeed();
 });
 
 // Initialize event listeners
 function initEventListeners() {
-    // Motor buttons - regular click for forward/back/stop
+    // Motor buttons
     document.querySelectorAll('.motor-btn').forEach(btn => {
         const action = btn.dataset.action;
         
@@ -52,48 +57,14 @@ function initEventListeners() {
                 sendSteeringAction('steer_center');
             });
         } else {
-            // Regular click for other actions
+            // Regular click for other actions (forward, back, stop)
             btn.addEventListener('click', () => {
                 sendMotorAction(action);
             });
         }
     });
 
-    // Mode buttons
-    document.querySelectorAll('.mode-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const mode = btn.dataset.mode;
-            setMode(mode);
-        });
-    });
-
-    // Pan slider
-    document.getElementById('pan-slider').addEventListener('input', (e) => {
-        const angle = parseInt(e.target.value);
-        sendPanAction(angle);
-    });
-
-    // Tilt slider
-    document.getElementById('tilt-slider').addEventListener('input', (e) => {
-        const angle = parseInt(e.target.value);
-        sendTiltAction(angle);
-    });
-
-    // Center camera button
-    document.getElementById('center-camera').addEventListener('click', () => {
-        centerCamera();
-    });
-
-    // Speak button
-    document.getElementById('speak-btn').addEventListener('click', () => {
-        const text = voiceInput.value.trim();
-        if (text) {
-            speak(text);
-            voiceInput.value = '';
-        }
-    });
-
-    // Emergency stop
+    // Emergency stop button
     document.getElementById('emergency-stop').addEventListener('click', () => {
         emergencyStop();
     });
@@ -101,6 +72,164 @@ function initEventListeners() {
     // Keyboard controls
     document.addEventListener('keydown', handleKeyPress);
     document.addEventListener('keyup', handleKeyPress);
+}
+
+// Initialize joystick
+function initJoystick() {
+    const rect = joystickBase.getBoundingClientRect();
+    joystickCenter = {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+    };
+    joystickMaxRadius = rect.width / 2 - 25; // Account for handle size
+
+    // Touch events
+    joystickBase.addEventListener('touchstart', handleJoystickStart, { passive: false });
+    joystickBase.addEventListener('touchmove', handleJoystickMove, { passive: false });
+    joystickBase.addEventListener('touchend', handleJoystickEnd, { passive: false });
+    joystickBase.addEventListener('touchcancel', handleJoystickEnd, { passive: false });
+
+    // Mouse events for desktop testing
+    joystickBase.addEventListener('mousedown', handleJoystickStart);
+    document.addEventListener('mousemove', handleJoystickMove);
+    document.addEventListener('mouseup', handleJoystickEnd);
+}
+
+// Joystick event handlers
+function handleJoystickStart(e) {
+    e.preventDefault();
+    joystickActive = true;
+    
+    const point = getEventPoint(e);
+    updateJoystickPosition(point);
+    
+    // Start continuous motor control
+    if (joystickInterval) clearInterval(joystickInterval);
+    joystickInterval = setInterval(updateMotorFromJoystick, 100);
+}
+
+function handleJoystickMove(e) {
+    if (!joystickActive) return;
+    e.preventDefault();
+    
+    const point = getEventPoint(e);
+    if (point) {
+        updateJoystickPosition(point);
+    }
+}
+
+function handleJoystickEnd(e) {
+    if (!joystickActive) return;
+    joystickActive = false;
+    
+    // Reset joystick position
+    joystickHandle.style.transform = 'translate(-50%, -50%)';
+    
+    // Stop motor
+    sendMotorAction('stop');
+    
+    // Center steering
+    sendSteeringAction('steer_center');
+    currentSteeringDirection = 'center';
+    
+    // Clear interval
+    if (joystickInterval) {
+        clearInterval(joystickInterval);
+        joystickInterval = null;
+    }
+}
+
+function getEventPoint(e) {
+    // Get touch or mouse position
+    try {
+        if (e.touches && e.touches.length > 0) {
+            return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        } else if (e.changedTouches && e.changedTouches.length > 0) {
+            return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+        } else if (e.clientX !== undefined && e.clientY !== undefined) {
+            return { x: e.clientX, y: e.clientY };
+        }
+    } catch (err) {
+        console.error('Error getting event point:', err);
+    }
+    return null;
+}
+
+function updateJoystickPosition(point) {
+    const dx = point.x - joystickCenter.x;
+    const dy = point.y - joystickCenter.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Limit to maximum radius
+    const clampedDistance = Math.min(distance, joystickMaxRadius);
+    const ratio = clampedDistance / joystickMaxRadius;
+    
+    const angle = Math.atan2(dy, dx);
+    const x = Math.cos(angle) * clampedDistance;
+    const y = Math.sin(angle) * clampedDistance;
+    
+    // Update handle position
+    joystickHandle.style.transform = `translate(${x - 25}px, ${y - 25}px)`;
+    
+    // Store normalized values (-1 to 1)
+    joystickHandle.dataset.x = (x / joystickMaxRadius).toFixed(2);
+    joystickHandle.dataset.y = (y / joystickMaxRadius).toFixed(2);
+}
+
+function updateMotorFromJoystick() {
+    if (!joystickActive) return;
+    
+    const x = parseFloat(joystickHandle.dataset.x || 0);
+    const y = parseFloat(joystickHandle.dataset.y || 0);
+    
+    // Deadzone
+    const deadzone = 0.2;
+    if (Math.abs(x) < deadzone && Math.abs(y) < deadzone) {
+        sendMotorAction('stop');
+        // Center steering when in deadzone
+        if (currentSteeringDirection !== 'center') {
+            sendSteeringAction('steer_center');
+            currentSteeringDirection = 'center';
+        }
+        return;
+    }
+    
+    // Determine direction based on joystick position
+    // Y axis: negative = forward, positive = backward
+    // X axis: negative = left, positive = right
+    
+    if (Math.abs(y) > Math.abs(x)) {
+        // Vertical movement dominant - handle front/back
+        if (y < -deadzone) {
+            sendMotorAction('front');
+        } else if (y > deadzone) {
+            sendMotorAction('back');
+        }
+        // Center steering when moving forward/back
+        if (currentSteeringDirection !== 'center') {
+            sendSteeringAction('steer_center');
+            currentSteeringDirection = 'center';
+        }
+    } else {
+        // Horizontal movement dominant - handle steering
+        if (x < -deadzone) {
+            // Left steering - only send once when direction changes
+            if (currentSteeringDirection !== 'left') {
+                sendSteeringAction('steer_left_hold');
+                currentSteeringDirection = 'left';
+            }
+            // Keep motor stopped during steering
+            sendMotorAction('stop');
+        } else if (x > deadzone) {
+            // Right steering - only send once when direction changes
+            if (currentSteeringDirection !== 'right') {
+                sendSteeringAction('steer_right_hold');
+                currentSteeringDirection = 'right';
+            }
+            // Keep motor stopped during steering
+            sendMotorAction('stop');
+        }
+    }
 }
 
 // Motor control
@@ -125,7 +254,10 @@ async function sendMotorAction(action) {
         }
         
         console.log('Motor action:', data);
-        showToast(`Motor: ${action}`, 'info');
+        // Don't show toast for every action to reduce noise - just errors
+        if (action === 'stop') {
+            // Silence stop notifications
+        }
     } catch (error) {
         console.error('Motor action error:', error);
         showToast('Motor control failed', 'error');
@@ -135,6 +267,7 @@ async function sendMotorAction(action) {
 // Steering control
 async function sendSteeringAction(action) {
     try {
+        console.log('Sending steering action:', action);
         const response = await fetch(`${API_BASE}/steering/${action}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -148,128 +281,16 @@ async function sendSteeringAction(action) {
             return;
         }
         
-        console.log('Steering action:', action);
+        console.log('Steering action success:', action);
     } catch (error) {
         console.error('Steering action error:', error);
-    }
-}
-
-// Mode control
-async function setMode(mode) {
-    try {
-        const response = await fetch(`${API_BASE}/mode/${mode}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('Mode set:', data);
-        
-        // Update UI
-        document.querySelectorAll('.mode-btn').forEach(btn => {
-            btn.classList.remove('active');
-            if (btn.dataset.mode === mode) {
-                btn.classList.add('active');
-            }
-        });
-    } catch (error) {
-        console.error('Set mode error:', error);
-        showToast('Failed to set mode', 'error');
-    }
-}
-
-// Pan control
-async function sendPanAction(angle) {
-    try {
-        const response = await fetch(`${API_BASE}/servo/pan`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ angle })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('Pan set:', data);
-    } catch (error) {
-        console.error('Pan error:', error);
-    }
-}
-
-// Tilt control
-async function sendTiltAction(angle) {
-    try {
-        const response = await fetch(`${API_BASE}/servo/tilt`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ angle })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('Tilt set:', data);
-    } catch (error) {
-        console.error('Tilt error:', error);
-    }
-}
-
-// Center camera
-async function centerCamera() {
-    try {
-        const response = await fetch(`${API_BASE}/servo/center`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('Camera centered:', data);
-        
-        // Update sliders
-        document.getElementById('pan-slider').value = 90;
-        document.getElementById('tilt-slider').value = 90;
-    } catch (error) {
-        console.error('Center camera error:', error);
-    }
-}
-
-// Speak
-async function speak(text) {
-    try {
-        const response = await fetch(`${API_BASE}/speak`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('Speak:', data);
-    } catch (error) {
-        console.error('Speak error:', error);
-        showToast('Failed to speak', 'error');
     }
 }
 
 // Emergency stop
 async function emergencyStop() {
     await sendMotorAction('stop');
-    showToast('EMERGENCY STOP', 'warning');
+    showToast('🛑 EMERGENCY STOP', 'warning');
 }
 
 // Test connection
@@ -297,25 +318,13 @@ function updateConnectionStatus(status) {
     }
 }
 
-// Video feed
-function initVideoFeed() {
-    videoFeed.addEventListener('load', () => {
-        videoLoader.style.display = 'none';
-    });
-    
-    videoFeed.addEventListener('error', () => {
-        videoLoader.style.display = 'flex';
-        videoLoader.querySelector('p').textContent = 'Camera unavailable';
-    });
-}
-
-// Keyboard control state
+// Keyboard controls
+// Keyboard control state for joystick simple control
 const keyState = {
     left: false,
     right: false
 };
 
-// Keyboard controls
 function handleKeyPress(e) {
     // Don't trigger if typing in input
     if (e.target.tagName === 'INPUT') return;
@@ -405,7 +414,7 @@ function showToast(message, type = 'info') {
     setTimeout(() => {
         toast.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    }, 2000);
 }
 
 // CSS animations for toast

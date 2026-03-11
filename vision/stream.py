@@ -1,148 +1,196 @@
-from picamera2 import Picamera2
-import http.server
-import socketserver
-import cv2
-import numpy as np
-import signal
-import sys
-
-# ==========================
-# LOAD OBJECT MODEL
-# ==========================
-
-CLASSES = [
-    "background","aeroplane","bicycle","bird","boat",
-    "bottle","bus","car","cat","chair","cow",
-    "diningtable","dog","horse","motorbike","person",
-    "pottedplant","sheep","sofa","train","tvmonitor"
-]
-
-net = cv2.dnn.readNetFromCaffe(
-    "/home/rambabu/model/MobileNetSSD_deploy.prototxt",
-    "/home/rambabu/model/MobileNetSSD_deploy.caffemodel"
-)
-
-print("Object detection model loaded")
-
-# ==========================
-# CAMERA
-# ==========================
-
-picam = Picamera2()
-picam.configure(
-    picam.create_video_configuration(
-        main={"size": (640,480), "format": "RGB888"}
-    )
-)
-picam.start()
-
-# Safe shutdown
-def shutdown_handler(sig, frame):
-    print("\nStopping camera...")
-    picam.stop()
-    sys.exit(0)
-
-signal.signal(signal.SIGINT, shutdown_handler)
-
-# ==========================
-# HTML (NO SCROLL)
-# ==========================
-
-HTML = """<!DOCTYPE html>
-<html>
-<head>
-<title>Object Detection</title>
-<style>
-html, body {
-    margin:0;
-    padding:0;
-    height:100%;
-    overflow:hidden;
-    background:black;
-}
-img {
-    width:100%;
-    height:100%;
-    object-fit:contain;
-}
-</style>
-</head>
-<body>
-<img src="/stream.mjpg">
-</body>
-</html>
+#!/usr/bin/env python3
+"""
+MJPEG streaming module for AI RC Car
+Generates video frames with optional detection overlay
 """
 
-# ==========================
-# SERVER
-# ==========================
+import cv2
+import time
+from typing import Optional, Generator, Tuple
+from utils.logger import log_debug, log_error
 
-class CamHandler(http.server.BaseHTTPRequestHandler):
 
-    def log_message(self, format, *args):
+def generate_frames(camera, detector=None) -> Generator[bytes, None, None]:
+    """
+    Generate MJPEG frames from camera with optional detection overlay
+
+    Args:
+        camera: Camera instance
+        detector: Optional detector instance for object detection
+
+    Yields:
+        JPEG encoded frames in MJPEG format
+    """
+    if not camera:
+        log_error("Camera not available for streaming")
         return
 
-    def do_GET(self):
+    frame_count = 0
+    start_time = time.time()
 
-        if self.path == "/stream.mjpg":
+    try:
+        while True:
+            # Get frame from camera
+            frame = camera.get_frame()
 
-            self.send_response(200)
-            self.send_header("Content-type","multipart/x-mixed-replace; boundary=frame")
-            self.end_headers()
+            if frame is None:
+                log_debug("No frame available")
+                time.sleep(0.1)
+                continue
 
-            try:
-                while True:
-                    frame = picam.capture_array()
+            # Optional detection overlay
+            if detector:
+                frame = add_detection_overlay(frame, detector)
 
-                    h, w = frame.shape[:2]
+            # Add distance overlay (if ultrasonic available)
+            # This would be passed in or accessed globally
+            # For now, just add timestamp
+            frame = add_info_overlay(frame)
 
-                    blob = cv2.dnn.blobFromImage(
-                        cv2.resize(frame, (300,300)),
-                        0.007843,
-                        (300,300),
-                        127.5
-                    )
+            # Encode as JPEG
+            ret, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
 
-                    net.setInput(blob)
-                    detections = net.forward()
+            if not ret:
+                log_error("Failed to encode frame")
+                continue
 
-                    for i in range(detections.shape[2]):
-                        confidence = detections[0,0,i,2]
+            # Yield MJPEG frame
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n" + jpeg.tobytes() + b"\r\n"
+            )
 
-                        if confidence > 0.5:
-                            idx = int(detections[0,0,i,1])
-                            label = CLASSES[idx]
+            # Frame rate control (~15fps)
+            frame_count += 1
+            elapsed = time.time() - start_time
+            if elapsed > 0:
+                fps = frame_count / elapsed
+                target_interval = 1.0 / 15.0  # 15fps
+                actual_interval = 1.0 / fps
+                if actual_interval < target_interval:
+                    time.sleep(target_interval - actual_interval)
 
-                            box = detections[0,0,i,3:7] * np.array([w,h,w,h])
-                            x1,y1,x2,y2 = box.astype("int")
+    except Exception as e:
+        log_error(f"Frame generation error: {e}")
+        raise
 
-                            cv2.rectangle(frame,(x1,y1),(x2,y2),(0,255,0),2)
-                            cv2.putText(frame,label,(x1,y1-5),
-                                        cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.7,(0,255,0),2)
 
-                    display = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                    _, jpeg = cv2.imencode(".jpg", display, [cv2.IMWRITE_JPEG_QUALITY,80])
+def add_detection_overlay(frame, detector) -> Tuple:
+    """
+    Add detection bounding boxes and labels to frame
 
-                    self.wfile.write(b"--frame\r\n")
-                    self.wfile.write(b"Content-Type: image/jpeg\r\n\r\n")
-                    self.wfile.write(jpeg.tobytes())
-                    self.wfile.write(b"\r\n")
+    Args:
+        frame: Input frame
+        detector: Detector instance
 
-            except:
-                pass
+    Returns:
+        Frame with detection overlay
+    """
+    try:
+        # Get detections from detector
+        detections = detector.detect(frame)
 
-        else:
-            self.send_response(200)
-            self.send_header("Content-type","text/html")
-            self.end_headers()
-            self.wfile.write(HTML.encode())
+        for detection in detections:
+            if detection["confidence"] > 0.5:
+                # Draw bounding box
+                x1, y1, x2, y2 = detection["box"]
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-PORT = 8000
+                # Draw label with confidence
+                label = f"{detection['label']}: {detection['confidence']:.0%}"
+                cv2.putText(
+                    frame,
+                    label,
+                    (x1, y1 - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 255, 0),
+                    2,
+                )
 
-class ThreadingServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
-    allow_reuse_address = True
+        return frame
 
-with ThreadingServer(("", PORT), CamHandler) as httpd:
-    print("Object detection running at http://YOUR_PI_IP:8000")
-    httpd.serve_forever()
+    except Exception as e:
+        log_debug(f"Detection overlay error: {e}")
+        return frame
+
+
+def add_info_overlay(frame) -> Tuple:
+    """
+    Add information overlay to frame
+
+    Args:
+        frame: Input frame
+
+    Returns:
+        Frame with info overlay
+    """
+    try:
+        h, w = frame.shape[:2]
+
+        # Add timestamp
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        cv2.putText(
+            frame,
+            timestamp,
+            (10, h - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 255, 255),
+            1,
+        )
+
+        # Add frame rate
+        fps = "15 FPS"
+        cv2.putText(
+            frame,
+            fps,
+            (w - 80, h - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 255, 255),
+            1,
+        )
+
+        return frame
+
+    except Exception as e:
+        log_debug(f"Info overlay error: {e}")
+        return frame
+
+
+class VideoStream:
+    """Video stream manager with graceful error handling"""
+
+    def __init__(self, camera, detector=None):
+        """
+        Initialize video stream
+
+        Args:
+            camera: Camera instance
+            detector: Optional detector instance
+        """
+        self.camera = camera
+        self.detector = detector
+        self.running = False
+
+    def start(self) -> Generator[bytes, None, None]:
+        """
+        Start streaming frames
+
+        Yields:
+            MJPEG encoded frames
+        """
+        self.running = True
+
+        try:
+            yield from generate_frames(self.camera, self.detector)
+
+        except Exception as e:
+            log_error(f"Stream error: {e}")
+            self.running = False
+            raise
+
+    def stop(self):
+        """Stop streaming"""
+        self.running = False

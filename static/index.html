@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI RC Car Control</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🚗 AI RC Car Control</h1>
+            <div class="connection-status">
+                <span id="status-indicator" class="indicator"></span>
+                <span id="status-text">Connecting...</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Mobile Joystick -->
+            <section class="joystick-section">
+                <h2>Mobile Joystick</h2>
+                <div class="joystick-container">
+                    <div id="joystick-base">
+                        <div id="joystick-handle"></div>
+                    </div>
+                </div>
+                <div class="joystick-hint">
+                    <small>Touch and drag to control movement</small>
+                </div>
+            </section>
+
+            <!-- Motor Control -->
+            <section class="motor-section">
+                <h2>Motor Control</h2>
+                <div class="motor-pad">
+                    <button class="motor-btn" data-action="front">⬆️ Forward</button>
+                    <button class="motor-btn" data-action="left">⬅️ Left</button>
+                    <button class="motor-btn stop-btn" data-action="stop">🛑 STOP</button>
+                    <button class="motor-btn" data-action="right">➡️ Right</button>
+                    <button class="motor-btn" data-action="back">⬇️ Back</button>
+                </div>
+                <div class="motor-hint">
+                    <small>WASD or Arrow keys to move | Space = Stop</small>
+                </div>
+            </section>
+
+            <!-- Emergency Stop -->
+            <section class="emergency-section">
+                <button id="emergency-stop" class="emergency-btn">🛑 EMERGENCY STOP</button>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/control_simple.js"></script>
+</body>
+</html>

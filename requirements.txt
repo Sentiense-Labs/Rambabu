@@ -1,0 +1,34 @@
+# Core
+RPi.GPIO>=0.7.1
+pigpio>=1.78
+
+# Vision
+picamera2>=0.3.17
+opencv-python>=4.9.0
+numpy>=1.26.0
+
+# AI/ML
+# google-generativeai>=0.3.0  # If using Gemini
+# anthropic>=0.84.0  # Claude API SDK (has dependency conflicts)
+httpx>=0.28.0  # HTTP client for direct Claude API calls
+
+# Audio
+SpeechRecognition>=3.10.0
+pyaudio>=0.2.14
+pyttsx3>=2.90
+
+# faster-whisper for offline STT
+faster-whisper>=0.10.0
+
+# MQTT & AWS
+paho-mqtt>=2.0.0
+awsiotsdk>=1.20.0
+
+# Web
+flask>=3.0.0
+
+# Performance (optional)
+orjson>=3.9.0  # Faster JSON
+
+# Type checking (dev only)
+mypy>=1.8.0

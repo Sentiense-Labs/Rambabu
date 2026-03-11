@@ -48,6 +48,7 @@ img { width:90%; margin-top:20px; }
 </html>
 """
 
+
 # ----------------------------
 # HTTP Handler
 # ----------------------------
@@ -60,7 +61,9 @@ class CamHandler(http.server.BaseHTTPRequestHandler):
 
         if self.path == "/stream.mjpg":
             self.send_response(200)
-            self.send_header("Content-type", "multipart/x-mixed-replace; boundary=frame")
+            self.send_header(
+                "Content-type", "multipart/x-mixed-replace; boundary=frame"
+            )
             self.end_headers()
 
             try:
@@ -69,23 +72,40 @@ class CamHandler(http.server.BaseHTTPRequestHandler):
                     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
                     face_locations = face_recognition.face_locations(rgb)
-                    face_encodings = face_recognition.face_encodings(rgb, face_locations)
+                    face_encodings = face_recognition.face_encodings(
+                        rgb, face_locations
+                    )
 
-                    for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
+                    for (top, right, bottom, left), face_encoding in zip(
+                        face_locations, face_encodings
+                    ):
 
-                        matches = face_recognition.compare_faces(known_encodings, face_encoding)
+                        matches = face_recognition.compare_faces(
+                            known_encodings, face_encoding
+                        )
                         name = "Unknown"
 
-                        face_distances = face_recognition.face_distance(known_encodings, face_encoding)
+                        face_distances = face_recognition.face_distance(
+                            known_encodings, face_encoding
+                        )
 
                         if len(face_distances) > 0:
                             best_match_index = np.argmin(face_distances)
                             if matches[best_match_index]:
                                 name = known_names[best_match_index]
 
-                        cv2.rectangle(frame, (left, top), (right, bottom), (0,255,0), 2)
-                        cv2.putText(frame, name, (left, top - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2)
+                        cv2.rectangle(
+                            frame, (left, top), (right, bottom), (0, 255, 0), 2
+                        )
+                        cv2.putText(
+                            frame,
+                            name,
+                            (left, top - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.8,
+                            (0, 255, 0),
+                            2,
+                        )
 
                     _, jpeg = cv2.imencode(".jpg", frame)
                     self.wfile.write(b"--frame\r\n")
@@ -102,13 +122,16 @@ class CamHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(HTML.encode())
 
+
 # ----------------------------
 # Start Server
 # ----------------------------
 PORT = 8000
 
+
 class ThreadingServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
+
 
 with ThreadingServer(("", PORT), CamHandler) as httpd:
     print(f"Face recognition running at http://<your-pi-ip>:{PORT}")

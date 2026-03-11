@@ -1,0 +1,722 @@
+/* Dark Theme CSS for AI RC Car Dashboard */
+
+/* Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg-primary: #0a0c10;
+    --bg-card: #1a1d24;
+    --accent-primary: #00e5ff;
+    --accent-success: #7cff6b;
+    --accent-danger: #ff6b35;
+    --text-primary: #e0e6ed;
+    --text-secondary: #a0a6ad;
+    --border-color: #2a2d34;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background-color: var(--bg-card);
+    border-radius: 12px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.header h1 {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--text-secondary);
+    animation: pulse 2s infinite;
+}
+
+.indicator.online {
+    background-color: var(--accent-success);
+}
+
+.indicator.warning {
+    background-color: var(--accent-danger);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Main Content Grid */
+.main-content {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+}
+
+/* Sections */
+section {
+    background-color: var(--bg-card);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+section h2 {
+    font-size: 18px;
+    margin-bottom: 15px;
+    color: var(--accent-primary);
+}
+
+/* Camera Section */
+.camera-section {
+    grid-column: 1;
+}
+
+.video-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    background-color: #000;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.video-feed {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.video-loader {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--bg-primary);
+    z-index: 10;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--border-color);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Mode Section */
+.mode-section {
+    grid-column: 1;
+}
+
+.mode-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.mode-btn {
+    flex: 1;
+    min-width: 100px;
+    padding: 15px 20px;
+    font-size: 14px;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    background-color: var(--border-color);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-height: 60px;
+}
+
+.mode-btn:hover {
+    background-color: var(--accent-primary);
+    color: #000;
+}
+
+.mode-btn.active {
+    background-color: var(--accent-success);
+    color: #000;
+}
+
+/* Status Section */
+.status-section {
+    grid-column: 1;
+}
+
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background-color: var(--bg-primary);
+    border-radius: 6px;
+}
+
+.status-label {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.status-value {
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.status-value.safe {
+    color: var(--accent-success);
+}
+
+.status-value.warning {
+    color: var(--accent-danger);
+}
+
+/* Motor Section */
+.motor-section {
+    grid-column: 1;
+}
+
+.motor-pad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 10px;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.motor-btn {
+    width: 100%;
+    height: 80px;
+    font-size: 32px;
+    border: none;
+    border-radius: 8px;
+    background-color: var(--border-color);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.motor-btn:hover {
+    background-color: var(--accent-primary);
+    color: #000;
+}
+
+.motor-btn:active {
+    transform: scale(0.95);
+}
+
+.motor-btn.stop-btn {
+    background-color: var(--accent-danger);
+    color: #fff;
+}
+
+.motor-hint {
+    text-align: center;
+    margin-top: 10px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+/* Camera Control Section */
+.camera-control-section {
+    grid-column: 1;
+}
+
+.camera-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.slider-group label {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+input[type="range"] {
+    width: 100%;
+    height: 8px;
+    border-radius: 4px;
+    background-color: var(--border-color);
+    outline: none;
+    -webkit-appearance: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: var(--accent-primary);
+    cursor: pointer;
+}
+
+.center-btn {
+    padding: 8px 16px;
+    background-color: var(--accent-primary);
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.camera-hint {
+    text-align: center;
+    margin-top: 10px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+/* Voice Section */
+.voice-section {
+    grid-column: 1;
+}
+
+.voice-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.voice-controls input {
+    flex: 1;
+    padding: 12px;
+    font-size: 14px;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+}
+
+.voice-controls button {
+    padding: 12px 20px;
+    background-color: var(--accent-primary);
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+/* Emergency Section */
+.emergency-section {
+    grid-column: 1;
+}
+
+.emergency-btn {
+    width: 100%;
+    padding: 20px;
+    font-size: 18px;
+    font-weight: bold;
+    background-color: var(--accent-danger);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.emergency-btn:hover {
+    background-color: #ff4d1a;
+    transform: scale(1.02);
+}
+
+.emergency-btn:active {
+    transform: scale(0.98);
+}
+
+/* Responsive Design */
+@media (min-width: 768px) {
+    .main-content {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .camera-section {
+        grid-column: 1 / -1;
+    }
+    
+    .mode-section,
+    .status-section {
+        grid-column: 1;
+    }
+    
+    .motor-section,
+    .camera-control-section {
+        grid-column: 2;
+    }
+}
+
+@media (min-width: 1024px) {
+    .main-content {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .camera-section {
+        grid-column: 1 / -1;
+    }
+    
+    .mode-section {
+        grid-column: 1;
+    }
+    
+    .motor-section {
+        grid-column: 2;
+    }
+    
+    .camera-control-section {
+        grid-column: 3;
+    }
+    
+    .status-section {
+        grid-column: 1 / -1;
+    }
+    
+    .voice-section,
+    .emergency-section {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Joystick Section */
+.joystick-section {
+    background-color: var(--bg-card);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    text-align: center;
+}
+
+.joystick-section h2 {
+    margin-bottom: 15px;
+    color: var(--accent-primary);
+}
+
+.joystick-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 200px;
+}
+
+#joystick-base {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--border-color) 0%, var(--bg-primary) 70%);
+    border: 3px solid var(--accent-primary);
+    position: relative;
+    touch-action: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#joystick-handle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-success));
+    border: 2px solid var(--text-primary);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    transition: all 0.1s ease;
+}
+
+#joystick-handle:active {
+    cursor: grabbing;
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+.joystick-hint {
+    margin-top: 15px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* Motor Control Section */
+.motor-section {
+    background-color: var(--bg-card);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.motor-section h2 {
+    margin-bottom: 15px;
+    color: var(--accent-primary);
+}
+
+.motor-pad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+    max-width: 300px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.motor-btn {
+    background-color: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 50px;
+}
+
+.motor-btn:hover {
+    border-color: var(--accent-primary);
+    background-color: rgba(0, 229, 255, 0.1);
+    transform: translateY(-1px);
+}
+
+.motor-btn:active {
+    transform: translateY(0);
+    background-color: var(--accent-primary);
+    color: var(--bg-primary);
+}
+
+.stop-btn {
+    background-color: var(--accent-danger);
+    border-color: var(--accent-danger);
+    grid-column: 2;
+}
+
+.stop-btn:hover {
+    background-color: #ff8c5a;
+    border-color: #ff8c5a;
+}
+
+.stop-btn:active {
+    background-color: #e65a2b;
+}
+
+.motor-hint {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* Emergency Stop */
+.emergency-section {
+    background-color: var(--bg-card);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    text-align: center;
+}
+
+.emergency-btn {
+    background-color: var(--accent-danger);
+    border: none;
+    color: white;
+    padding: 15px 30px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: bold;
+    transition: all 0.2s ease;
+    width: 100%;
+    max-width: 300px;
+}
+
+.emergency-btn:hover {
+    background-color: #ff8c5a;
+    transform: translateY(-1px);
+}
+
+.emergency-btn:active {
+    background-color: #e65a2b;
+    transform: translateY(0);
+}
+
+/* Connection Status */
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #666;
+    animation: pulse 2s infinite;
+}
+
+.indicator.online {
+    background-color: var(--accent-success);
+    animation: none;
+}
+
+.indicator.offline {
+    background-color: var(--accent-danger);
+    animation: none;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+#status-text {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+/* Toast Notifications */
+.toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 15px 20px;
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    border-radius: 8px;
+    z-index: 1000;
+    animation: slideIn 0.3s ease;
+    font-weight: bold;
+}
+
+.toast-error {
+    background: var(--accent-danger);
+    color: white;
+}
+
+.toast-warning {
+    background: #ffa500;
+    color: white;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+}
+
+/* Responsive Layout */
+.main-content {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+}
+
+@media (min-width: 768px) {
+    .main-content {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .joystick-section {
+        grid-column: 1;
+    }
+    
+    .motor-section {
+        grid-column: 2;
+    }
+    
+    .emergency-section {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Touch-friendly buttons on mobile */
+@media (max-width: 767px) {
+    .motor-section {
+        display: none; /* Hide motor buttons on mobile */
+    }
+    
+    .joystick-section {
+        order: -1; /* Move joystick to top on mobile */
+    }
+    
+    .emergency-section {
+        order: 1; /* Move stop button after joystick */
+        margin-top: 20px;
+    }
+    
+    #joystick-base {
+        width: 200px;
+        height: 200px;
+    }
+    
+    #joystick-handle {
+        width: 70px;
+        height: 70px;
+    }
+}

@@ -1,0 +1,17 @@
+[Unit]
+Description=AI RC Car - Autonomous Navigation System
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/rambabu/rambabu_rc
+ExecStart=/usr/bin/python3 /home/rambabu/rambabu_rc/main.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aicar
+
+[Install]
+WantedBy=multi-user.target
