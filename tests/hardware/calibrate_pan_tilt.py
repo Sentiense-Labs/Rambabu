@@ -18,14 +18,12 @@ class CalibrationAborted(Exception):
     """Raised when the operator aborts calibration."""
 
 
-
 def prompt_yes_no(message: str, default: bool = True) -> bool:
     suffix = " [Y/n]: " if default else " [y/N]: "
     response = input(message + suffix).strip().lower()
     if not response:
         return default
     return response in {"y", "yes"}
-
 
 
 def prompt_int(message: str, default: int) -> int:
@@ -35,8 +33,9 @@ def prompt_int(message: str, default: int) -> int:
     return int(response)
 
 
-
-def move_and_confirm_direction(pan_tilt: PanTilt, axis: str, angle: int, expected: str) -> None:
+def move_and_confirm_direction(
+    pan_tilt: PanTilt, axis: str, angle: int, expected: str
+) -> None:
     if axis == "pan":
         pan_tilt.pan_to(angle)
     else:
@@ -52,7 +51,6 @@ def move_and_confirm_direction(pan_tilt: PanTilt, axis: str, angle: int, expecte
         )
 
     time.sleep(STEP_DELAY)
-
 
 
 def find_limit(pan_tilt: PanTilt, axis: str, start: int, stop: int, step: int) -> int:
@@ -75,12 +73,13 @@ def find_limit(pan_tilt: PanTilt, axis: str, start: int, stop: int, step: int) -
                 pan_tilt.pan_to(current_safe)
             else:
                 pan_tilt.tilt_to(current_safe)
-            log_warning(f"{axis.capitalize()} limit reached before {angle}°; using {current_safe}°")
+            log_warning(
+                f"{axis.capitalize()} limit reached before {angle}°; using {current_safe}°"
+            )
             return current_safe
         current_safe = angle
 
     return current_safe
-
 
 
 def run_phase_1(pan_tilt: PanTilt) -> tuple[int, int]:
@@ -92,8 +91,16 @@ def run_phase_1(pan_tilt: PanTilt) -> tuple[int, int]:
     pan_still = prompt_yes_no("Pan servo stayed still at 90°?", default=True)
     tilt_still = prompt_yes_no("Tilt servo stayed still at 90°?", default=True)
 
-    pan_offset = 0 if pan_still else prompt_int("Observed pan offset from true center (degrees)", 0)
-    tilt_offset = 0 if tilt_still else prompt_int("Observed tilt offset from true center (degrees)", 0)
+    pan_offset = (
+        0
+        if pan_still
+        else prompt_int("Observed pan offset from true center (degrees)", 0)
+    )
+    tilt_offset = (
+        0
+        if tilt_still
+        else prompt_int("Observed tilt offset from true center (degrees)", 0)
+    )
 
     if pan_still:
         log_info("Pan servo at 90° - no movement detected ✓")
@@ -106,7 +113,6 @@ def run_phase_1(pan_tilt: PanTilt) -> tuple[int, int]:
         log_warning(f"Tilt servo moved at 90°; observed offset {tilt_offset}°")
 
     return pan_offset, tilt_offset
-
 
 
 def run_phase_2(pan_tilt: PanTilt) -> None:
@@ -124,7 +130,6 @@ def run_phase_2(pan_tilt: PanTilt) -> None:
 
     pan_tilt.center()
     log_info("Angle mapping verification completed")
-
 
 
 def run_phase_3(pan_tilt: PanTilt) -> dict[str, int]:
@@ -156,7 +161,6 @@ def run_phase_3(pan_tilt: PanTilt) -> dict[str, int]:
         "tilt_min": tilt_min,
         "tilt_max": tilt_max,
     }
-
 
 
 def run_phase_4(pan_tilt: PanTilt, limits: dict[str, int]) -> None:
@@ -208,17 +212,21 @@ def run_phase_4(pan_tilt: PanTilt, limits: dict[str, int]) -> None:
         default=True,
     )
     if not free_motion:
-        log_warning("Cable routing or mechanical clearance needs adjustment before regular use")
-
+        log_warning(
+            "Cable routing or mechanical clearance needs adjustment before regular use"
+        )
 
 
 def print_wiring_checklist() -> None:
     print("\n=== Manual Wiring Verification Checklist ===")
     print("Pan servo (bottom): signal->GPIO18, power->buck 5V rail, ground->common GND")
-    print("Tilt servo (top): signal->GPIO19, power->same buck 5V rail, ground->common GND")
+    print(
+        "Tilt servo (top): signal->GPIO19, power->same buck 5V rail, ground->common GND"
+    )
     print("Power: both servos on buck converter 5V, not Raspberry Pi 5V pin")
-    print("Cable management: CSI cable slack through full pan/tilt range, no pinch or snag")
-
+    print(
+        "Cable management: CSI cable slack through full pan/tilt range, no pinch or snag"
+    )
 
 
 def main() -> int:

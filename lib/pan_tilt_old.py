@@ -15,7 +15,7 @@ class PanTilt:
 
     def __init__(self):
         """Initialize pan-tilt servos"""
-        GPIO.setmode(GPIO.BCM)
+        # GPIO.setmode() is handled by main.py before creating this object
         GPIO.setwarnings(False)
 
         # Get GPIO pins from config
@@ -149,7 +149,7 @@ class PanTilt:
         """Hold position by refreshing PWM periodically (for heavy loads)."""
         end_time = time.time() + duration_sec
         pwm = self.pan_pwm if axis == "pan" else self.tilt_pwm
-        
+
         while time.time() < end_time:
             duty = self._angle_to_duty(angle)
             pwm.ChangeDutyCycle(duty)
@@ -161,19 +161,19 @@ class PanTilt:
         """Scan from start to end angle smoothly (keep PWM active during movement)."""
         clamped_start = self._clamp_angle(start_angle, config.PAN_MIN, config.PAN_MAX)
         clamped_end = self._clamp_angle(end_angle, config.PAN_MIN, config.PAN_MAX)
-        
+
         if clamped_start < clamped_end:
             angles = range(clamped_start, clamped_end + 1, step)
         else:
             angles = range(clamped_start, clamped_end - 1, -step)
-        
+
         for angle in angles:
             servo_angle = self._apply_offset(angle, config.PAN_OFFSET)
             duty = self._angle_to_duty(servo_angle)
             self.pan_pwm.ChangeDutyCycle(duty)
             time.sleep(0.05)
             self.pan_angle = angle
-        
+
         # Kill PWM after scan complete
         time.sleep(config.SERVO_MOVE_DELAY)
         self.pan_pwm.ChangeDutyCycle(0)
@@ -188,5 +188,5 @@ class PanTilt:
             time.sleep(0.1)
             self.pan_pwm.stop()
             self.tilt_pwm.stop()
-        except Exception:
-            pass  # Ignore cleanup errors
+        except Exception as e:
+            log_warning(f"Pan-tilt cleanup error: {e}")

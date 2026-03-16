@@ -4,7 +4,6 @@ Logging utility for AI RC Car
 Provides timestamped logging to console and file
 """
 
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -15,16 +14,32 @@ INFO = 1
 WARNING = 2
 ERROR = 3
 
-# Current log level (can be set via config)
-LOG_LEVEL = INFO
-
-# Log file path
-LOG_FILE = Path("logs/runtime.log")
+# Read from config — import deferred to avoid circular imports
+_LOG_LEVEL_MAP = {"DEBUG": DEBUG, "INFO": INFO, "WARNING": WARNING, "ERROR": ERROR}
 
 
-def _ensure_log_dir():
+def _get_config_value(attr: str, default):
+    """Safely read a config attribute, falling back if config isn't available yet."""
+    try:
+        import config
+
+        return getattr(config, attr, default)
+    except Exception:
+        return default
+
+
+def _get_log_level() -> int:
+    level_str = _get_config_value("LOG_LEVEL", "INFO")
+    return _LOG_LEVEL_MAP.get(level_str, INFO)
+
+
+def _get_log_file() -> Path:
+    return Path(_get_config_value("LOG_FILE", "logs/runtime.log"))
+
+
+def _ensure_log_dir(log_file: Path):
     """Create logs directory if it doesn't exist"""
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
 
 
 def _get_timestamp() -> str:
@@ -34,7 +49,7 @@ def _get_timestamp() -> str:
 
 def _log(level: int, level_name: str, msg: str) -> None:
     """Internal logging function"""
-    if level < LOG_LEVEL:
+    if level < _get_log_level():
         return
 
     timestamp = _get_timestamp()
@@ -45,11 +60,12 @@ def _log(level: int, level_name: str, msg: str) -> None:
 
     # Output to file
     try:
-        _ensure_log_dir()
-        with open(LOG_FILE, "a") as f:
+        log_file = _get_log_file()
+        _ensure_log_dir(log_file)
+        with open(log_file, "a") as f:
             f.write(log_msg + "\n")
     except Exception as e:
-        print(f"Failed to write to log file: {e}")
+        print(f"Failed to write to log file: {e}", file=sys.stderr)
 
 
 def log_debug(msg: str) -> None:
@@ -73,6 +89,7 @@ def log_error(msg: str) -> None:
 
 
 def set_log_level(level: int) -> None:
-    """Set minimum log level"""
-    global LOG_LEVEL
-    LOG_LEVEL = level
+    """Set minimum log level (runtime override)"""
+    # This is a no-op now — log level comes from config
+    # Kept for backwards compatibility
+    pass

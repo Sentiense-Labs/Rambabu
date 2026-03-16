@@ -6,7 +6,6 @@ Controls rear drive motor and steering motor using RPi.GPIO
 
 import RPi.GPIO as GPIO
 import time
-from typing import Optional
 from utils.logger import log_info, log_error
 import config
 
@@ -29,8 +28,16 @@ class MotorController:
         # Track current direction so obstacle monitor only stops forward motion
         self._direction = "stopped"
 
-        # Initialize GPIO
-        GPIO.setmode(GPIO.BCM)
+        # Obstacle check callbacks — injected by main.py after ultrasonic init
+        self._obstacle_check = None       # Returns True if path is blocked (distance <= 50cm)
+        self._obstacle_clear_check = None  # Returns True if path is clear (distance > 70cm)
+
+        # Hysteresis latch: once an obstacle stops forward motion, stay latched
+        # until distance exceeds OBSTACLE_CLEAR_DISTANCE (70cm), or
+        # the car moves backward (which clears the latch explicitly).
+        self._obstacle_latched = False
+
+        # GPIO.setmode() is handled by main.py before creating this object
         GPIO.setwarnings(False)
 
         # Setup output pins
@@ -40,8 +47,8 @@ class MotorController:
         GPIO.setup(self.steer_right, GPIO.OUT)
 
         # Initialize PWM for rear motor (speed control)
-        self.pwm_forward = GPIO.PWM(self.rear_forward, 1000)
-        self.pwm_backward = GPIO.PWM(self.rear_backward, 1000)
+        self.pwm_forward = GPIO.PWM(self.rear_forward, config.MOTOR_PWM_FREQ)
+        self.pwm_backward = GPIO.PWM(self.rear_backward, config.MOTOR_PWM_FREQ)
 
         # Start PWM with 0% duty cycle (stopped)
         self.pwm_forward.start(0)
@@ -50,130 +57,152 @@ class MotorController:
         # Ensure all outputs are low
         self.stop()
 
+    def set_obstacle_check(self, check_fn, clear_fn=None) -> None:
+        """Inject obstacle check callbacks.
+        check_fn() -> True if blocked (distance <= detection threshold).
+        clear_fn() -> True if genuinely clear (distance > clear threshold with hysteresis).
+        """
+        self._obstacle_check = check_fn
+        self._obstacle_clear_check = clear_fn
+
     @property
     def is_moving_forward(self) -> bool:
         """True when the car is actively driving forward"""
         return self._direction == "forward"
 
-    def front(self, speed: int = 70) -> None:
-        """
-        Drive forward at given speed (0-100)
-        """
-        # Stop backward PWM
-        self.pwm_backward.ChangeDutyCycle(0)
+    def latch_obstacle(self) -> None:
+        """Engage obstacle latch — called by monitor when obstacle detected."""
+        if not self._obstacle_latched:
+            self._obstacle_latched = True
+            log_info("Motor: Obstacle latch engaged — forward blocked until obstacle clears")
 
-        # Start forward PWM with speed
+    def _check_latch(self) -> bool:
+        """Returns True if forward is still blocked. Only releases when distance > OBSTACLE_CLEAR_DISTANCE."""
+        if not self._obstacle_latched:
+            return False
+        # Use the clear check (with hysteresis) if available, otherwise fall back to obstacle check
+        if self._obstacle_clear_check and self._obstacle_clear_check():
+            self._obstacle_latched = False
+            log_info("Motor: Obstacle latch released — path is clear (hysteresis passed)")
+            return False
+        elif not self._obstacle_clear_check and self._obstacle_check and not self._obstacle_check():
+            # Fallback: no clear_fn provided, use inverse of obstacle check
+            self._obstacle_latched = False
+            log_info("Motor: Obstacle latch released — path is clear")
+            return False
+        return True
+
+    def front(self, speed: int = config.DEFAULT_SPEED) -> dict:
+        """Drive forward at given speed (0-100). Refuses if obstacle detected or latched."""
+        if self._check_latch():
+            log_info("Motor: Forward blocked — obstacle latch active")
+            return {"status": "error", "error_code": "OBSTACLE_DETECTED",
+                    "message": "Obstacle latched — path not clear yet"}
+
+        if self._obstacle_check and self._obstacle_check():
+            self.latch_obstacle()
+            self.stop()
+            log_info("Motor: Forward BLOCKED by obstacle check")
+            return {"status": "error", "error_code": "OBSTACLE_DETECTED",
+                    "message": "Obstacle detected — cannot move forward"}
+
+        self.pwm_backward.ChangeDutyCycle(0)
         duty_cycle = min(max(speed, 0), 100)
         self.pwm_forward.ChangeDutyCycle(duty_cycle)
         self._direction = "forward"
-        log_info(f"Motor: Forward at {speed}%")
+        log_info(f"Motor: Forward at {duty_cycle}%")
+        return {"status": "ok", "direction": "forward", "speed": duty_cycle}
 
-    def back(self, speed: int = 50) -> None:
-        """
-        Drive backward at given speed (0-100)
-        """
-        # Stop forward PWM
+    def back(self, speed: int = config.DEFAULT_SPEED) -> dict:
+        """Drive backward at given speed (0-100). Clears obstacle latch."""
+        if self._obstacle_latched:
+            self._obstacle_latched = False
+            log_info("Motor: Obstacle latch cleared by backward movement")
         self.pwm_forward.ChangeDutyCycle(0)
-
-        # Start backward PWM with speed
         duty_cycle = min(max(speed, 0), 100)
         self.pwm_backward.ChangeDutyCycle(duty_cycle)
         self._direction = "backward"
-        log_info(f"Motor: Backward at {speed}%")
+        log_info(f"Motor: Backward at {duty_cycle}%")
+        return {"status": "ok", "direction": "backward", "speed": duty_cycle}
 
-    def left(self) -> None:
-        """
-        Turn left for 0.5 seconds (auto-reset)
-        """
+    def left(self) -> dict:
+        """Turn left for STEER_PULSE_DURATION seconds (auto-reset)."""
         self._direction = "left"
         GPIO.output(self.steer_left, GPIO.LOW)
         GPIO.output(self.steer_right, GPIO.HIGH)
-        time.sleep(0.5)
+        time.sleep(config.STEER_PULSE_DURATION)
         GPIO.output(self.steer_right, GPIO.LOW)
         self._direction = "stopped"
         log_info("Motor: Steering left")
+        return {"status": "ok", "direction": "left"}
 
-    def steer_left_hold(self) -> None:
-        """
-        Start turning left and HOLD position (doesn't auto-reset)
-        Use steer_center() to reset
-        """
+    def steer_left_hold(self) -> dict:
+        """Start turning left and HOLD position (use steer_center() to reset)."""
         self._direction = "left"
         try:
             GPIO.output(self.steer_left, GPIO.LOW)
             GPIO.output(self.steer_right, GPIO.HIGH)
             log_info("Motor: Steering left (hold)")
+            return {"status": "ok", "direction": "left_hold"}
         except Exception as e:
             log_error(f"Steering left error: {e}")
+            return {"status": "error", "error_code": "MOTOR_STALL", "message": str(e)}
 
-    def right(self) -> None:
-        """
-        Turn right for 0.5 seconds (auto-reset)
-        """
+    def right(self) -> dict:
+        """Turn right for STEER_PULSE_DURATION seconds (auto-reset)."""
         self._direction = "right"
         GPIO.output(self.steer_left, GPIO.HIGH)
         GPIO.output(self.steer_right, GPIO.LOW)
-        time.sleep(0.5)
+        time.sleep(config.STEER_PULSE_DURATION)
         GPIO.output(self.steer_left, GPIO.LOW)
         self._direction = "stopped"
         log_info("Motor: Steering right")
+        return {"status": "ok", "direction": "right"}
 
-    def steer_right_hold(self) -> None:
-        """
-        Start turning right and HOLD position (doesn't auto-reset)
-        Use steer_center() to reset
-        """
+    def steer_right_hold(self) -> dict:
+        """Start turning right and HOLD position (use steer_center() to reset)."""
         self._direction = "right"
         try:
             GPIO.output(self.steer_left, GPIO.HIGH)
             GPIO.output(self.steer_right, GPIO.LOW)
             log_info("Motor: Steering right (hold)")
+            return {"status": "ok", "direction": "right_hold"}
         except Exception as e:
             log_error(f"Steering right error: {e}")
+            return {"status": "error", "error_code": "MOTOR_STALL", "message": str(e)}
 
-    def steer_center(self) -> None:
-        """
-        Return steering to center position
-        """
+    def steer_center(self) -> dict:
+        """Return steering to center position."""
         self._direction = "stopped"
         try:
             GPIO.output(self.steer_left, GPIO.LOW)
             GPIO.output(self.steer_right, GPIO.LOW)
             log_info("Motor: Steering centered")
+            return {"status": "ok", "direction": "center"}
         except Exception as e:
             log_error(f"Steering center error: {e}")
+            return {"status": "error", "error_code": "MOTOR_STALL", "message": str(e)}
 
-    def stop(self) -> None:
-        """
-        Stop all motors immediately
-        """
-        # Stop PWM
+    def stop(self) -> dict:
+        """Stop all motors immediately."""
         self.pwm_forward.ChangeDutyCycle(0)
         self.pwm_backward.ChangeDutyCycle(0)
-
-        # Ensure all GPIO outputs are low
         GPIO.output(self.rear_forward, GPIO.LOW)
         GPIO.output(self.rear_backward, GPIO.LOW)
         GPIO.output(self.steer_left, GPIO.LOW)
         GPIO.output(self.steer_right, GPIO.LOW)
         self._direction = "stopped"
         log_info("Motor: Stopped")
+        return {"status": "ok", "direction": "stopped"}
 
     def cleanup(self) -> None:
-        """
-        Clean up GPIO and PWM resources
-        """
+        """Clean up GPIO and PWM resources."""
         try:
-            # Stop PWM first
             if self.pwm_forward:
                 self.pwm_forward.stop()
             if self.pwm_backward:
                 self.pwm_backward.stop()
-
-            # Stop all motors
             self.stop()
-
-            # Cleanup GPIO
             GPIO.cleanup()
         except Exception as e:
             log_error(f"Motor cleanup error: {e}")

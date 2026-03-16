@@ -18,39 +18,39 @@ def test_obstacle_detection():
     try:
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
-        
+
         motor = MotorController()
         ultrasonic = Ultrasonic()
-        
+
         time.sleep(1)
-        
+
         # Move forward
         motor.front(70)
-        
+
         for i in range(60):
             distance = ultrasonic.get_distance()
-            
+
             if distance <= STOP_DISTANCE:
                 print(f"[{i+1:2d}s] 🛑 OBSTACLE at {distance:.1f}cm - STOPPING")
                 motor.stop()
                 break
             else:
                 print(f"[{i+1:2d}s] Moving... {distance:.1f}cm")
-            
+
             time.sleep(0.5)
-        
+
         motor.stop()
         ultrasonic.stop()
         motor.cleanup()
         GPIO.cleanup()
-        
+
     except KeyboardInterrupt:
         print("\nStopped by user")
         motor.stop()
         ultrasonic.stop()
         motor.cleanup()
         GPIO.cleanup()
-    
+
     except Exception as e:
         print(f"Error: {e}")
         motor.stop()

@@ -311,6 +311,8 @@ function initVideoFeed() {
 
 // Keyboard control state
 const keyState = {
+    forward: false,
+    backward: false,
     left: false,
     right: false
 };
@@ -327,13 +329,19 @@ function handleKeyPress(e) {
             case 'W':
             case 'ArrowUp':
                 e.preventDefault();
-                sendMotorAction('front');
+                if (!keyState.forward) {
+                    keyState.forward = true;
+                    sendMotorAction('front');
+                }
                 break;
             case 's':
             case 'S':
             case 'ArrowDown':
                 e.preventDefault();
-                sendMotorAction('back');
+                if (!keyState.backward) {
+                    keyState.backward = true;
+                    sendMotorAction('back');
+                }
                 break;
             case 'a':
             case 'A':
@@ -360,6 +368,24 @@ function handleKeyPress(e) {
         }
     } else if (e.type === 'keyup') {
         switch(e.key) {
+            case 'w':
+            case 'W':
+            case 'ArrowUp':
+                e.preventDefault();
+                if (keyState.forward) {
+                    keyState.forward = false;
+                    sendMotorAction('stop');
+                }
+                break;
+            case 's':
+            case 'S':
+            case 'ArrowDown':
+                e.preventDefault();
+                if (keyState.backward) {
+                    keyState.backward = false;
+                    sendMotorAction('stop');
+                }
+                break;
             case 'a':
             case 'A':
             case 'ArrowLeft':

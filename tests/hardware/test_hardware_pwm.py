@@ -24,7 +24,11 @@ def test_single_movements(pan_tilt: PanTilt) -> bool:
     print("\n=== Test 1: Single Movements (Hardware PWM) ===")
 
     # Use angles within configured limits
-    movements = [(config.PAN_MAX, "right"), (config.PAN_MIN, "left"), (config.PAN_CENTER, "center")]
+    movements = [
+        (config.PAN_MAX, "right"),
+        (config.PAN_MIN, "left"),
+        (config.PAN_CENTER, "center"),
+    ]
 
     for angle, direction in movements:
         print(f"Moving pan to {angle}° ({direction})")
@@ -36,7 +40,9 @@ def test_single_movements(pan_tilt: PanTilt) -> bool:
             default=True,
         )
         if not no_jitter:
-            log_warning(f"Jitter detected at {angle}° - hardware PWM may not be working")
+            log_warning(
+                f"Jitter detected at {angle}° - hardware PWM may not be working"
+            )
             return False
 
     print("✓ Single movements work without jitter (hardware PWM working)")

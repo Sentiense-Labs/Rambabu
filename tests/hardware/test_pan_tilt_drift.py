@@ -14,7 +14,6 @@ CHECK_INTERVAL_SECONDS = 30
 TOTAL_DURATION_SECONDS = 5 * 60
 
 
-
 def main() -> int:
     pan_tilt = None
     GPIO.setwarnings(False)
@@ -33,7 +32,11 @@ def main() -> int:
             print(f"Drift check {iteration}/{iterations}: re-sending 90°/90°")
             pan_tilt.pan_to(config.PAN_CENTER)
             pan_tilt.tilt_to(config.TILT_CENTER)
-            drifted = input("Did either servo visibly drift before this refresh? [y/N]: ").strip().lower()
+            drifted = (
+                input("Did either servo visibly drift before this refresh? [y/N]: ")
+                .strip()
+                .lower()
+            )
             if drifted in {"y", "yes"}:
                 log_warning(
                     f"Drift detected after {iteration * CHECK_INTERVAL_SECONDS} seconds at center"

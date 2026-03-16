@@ -32,8 +32,13 @@ def create_app(
     Returns:
         Flask application instance
     """
-    # Create Flask app
-    app = Flask(__name__, static_folder="../static", template_folder="../static")
+    # Create Flask app — use absolute paths so working directory doesn't matter
+    project_root = Path(__file__).resolve().parent.parent
+    app = Flask(
+        __name__,
+        static_folder=str(project_root / "static"),
+        template_folder=str(project_root / "static"),
+    )
 
     # Enable CORS for mobile access
     CORS(app)
@@ -49,21 +54,23 @@ def create_app(
     )
 
     # Configure app
-    app.config["SECRET_KEY"] = "ai-rc-car-secret-key-change-in-production"
+    import os
+
+    app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
 
     # Register error handlers
     @app.errorhandler(404)
     def not_found(error):
-        return {"error": "Not found"}, 404
+        return {"error_code": "NOT_FOUND", "message": "Not found"}, 404
 
     @app.errorhandler(500)
     def internal_error(error):
-        return {"error": "Internal server error"}, 500
+        return {"error_code": "INTERNAL_ERROR", "message": "Internal server error"}, 500
 
     @app.errorhandler(Exception)
     def handle_exception(e):
         log_error(f"Unhandled exception: {e}")
-        return {"error": "Internal server error"}, 500
+        return {"error_code": "INTERNAL_ERROR", "message": "Internal server error"}, 500
 
     log_info("Flask application created")
     return app

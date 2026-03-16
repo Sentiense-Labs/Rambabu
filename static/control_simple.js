@@ -8,6 +8,7 @@ let connectionStatus = 'connecting';
 let joystickActive = false;
 let joystickInterval = null;
 let currentSteeringDirection = 'center'; // Track current steering state
+let currentMotorDirection = 'stop'; // Track current motor command to avoid re-sending
 
 // DOM elements
 const statusIndicator = document.getElementById('status-indicator');
@@ -124,10 +125,11 @@ function handleJoystickEnd(e) {
     
     // Reset joystick position
     joystickHandle.style.transform = 'translate(-50%, -50%)';
-    
+
     // Stop motor
+    currentMotorDirection = 'stop';
     sendMotorAction('stop');
-    
+
     // Center steering
     sendSteeringAction('steer_center');
     currentSteeringDirection = 'center';
@@ -185,7 +187,10 @@ function updateMotorFromJoystick() {
     // Deadzone
     const deadzone = 0.2;
     if (Math.abs(x) < deadzone && Math.abs(y) < deadzone) {
-        sendMotorAction('stop');
+        if (currentMotorDirection !== 'stop') {
+            currentMotorDirection = 'stop';
+            sendMotorAction('stop');
+        }
         // Center steering when in deadzone
         if (currentSteeringDirection !== 'center') {
             sendSteeringAction('steer_center');
@@ -197,13 +202,19 @@ function updateMotorFromJoystick() {
     // Determine direction based on joystick position
     // Y axis: negative = forward, positive = backward
     // X axis: negative = left, positive = right
-    
+
     if (Math.abs(y) > Math.abs(x)) {
         // Vertical movement dominant - handle front/back
         if (y < -deadzone) {
-            sendMotorAction('front');
+            if (currentMotorDirection !== 'front') {
+                currentMotorDirection = 'front';
+                sendMotorAction('front');
+            }
         } else if (y > deadzone) {
-            sendMotorAction('back');
+            if (currentMotorDirection !== 'back') {
+                currentMotorDirection = 'back';
+                sendMotorAction('back');
+            }
         }
         // Center steering when moving forward/back
         if (currentSteeringDirection !== 'center') {
@@ -219,7 +230,10 @@ function updateMotorFromJoystick() {
                 currentSteeringDirection = 'left';
             }
             // Keep motor stopped during steering
-            sendMotorAction('stop');
+            if (currentMotorDirection !== 'stop') {
+                currentMotorDirection = 'stop';
+                sendMotorAction('stop');
+            }
         } else if (x > deadzone) {
             // Right steering - only send once when direction changes
             if (currentSteeringDirection !== 'right') {
@@ -227,7 +241,10 @@ function updateMotorFromJoystick() {
                 currentSteeringDirection = 'right';
             }
             // Keep motor stopped during steering
-            sendMotorAction('stop');
+            if (currentMotorDirection !== 'stop') {
+                currentMotorDirection = 'stop';
+                sendMotorAction('stop');
+            }
         }
     }
 }
@@ -321,6 +338,8 @@ function updateConnectionStatus(status) {
 // Keyboard controls
 // Keyboard control state for joystick simple control
 const keyState = {
+    forward: false,
+    backward: false,
     left: false,
     right: false
 };
@@ -336,13 +355,19 @@ function handleKeyPress(e) {
             case 'W':
             case 'ArrowUp':
                 e.preventDefault();
-                sendMotorAction('front');
+                if (!keyState.forward) {
+                    keyState.forward = true;
+                    sendMotorAction('front');
+                }
                 break;
             case 's':
             case 'S':
             case 'ArrowDown':
                 e.preventDefault();
-                sendMotorAction('back');
+                if (!keyState.backward) {
+                    keyState.backward = true;
+                    sendMotorAction('back');
+                }
                 break;
             case 'a':
             case 'A':
@@ -369,6 +394,24 @@ function handleKeyPress(e) {
         }
     } else if (e.type === 'keyup') {
         switch(e.key) {
+            case 'w':
+            case 'W':
+            case 'ArrowUp':
+                e.preventDefault();
+                if (keyState.forward) {
+                    keyState.forward = false;
+                    sendMotorAction('stop');
+                }
+                break;
+            case 's':
+            case 'S':
+            case 'ArrowDown':
+                e.preventDefault();
+                if (keyState.backward) {
+                    keyState.backward = false;
+                    sendMotorAction('stop');
+                }
+                break;
             case 'a':
             case 'A':
             case 'ArrowLeft':

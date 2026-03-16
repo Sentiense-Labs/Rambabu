@@ -45,7 +45,7 @@ class Navigator:
                 distance = self.ultrasonic.get_distance()
 
                 # Safety check first - emergency stop
-                if distance < 20:
+                if distance < config.STOP_DISTANCE:
                     self.motor.stop()
                     log_warning(f"EMERGENCY STOP: Obstacle at {distance:.1f}cm")
                     time.sleep(self.loop_interval)
@@ -93,10 +93,10 @@ class Navigator:
             log_warning("EMERGENCY STOP: Voice command")
             self.mode_manager.set_mode(self.mode_manager.STOPPED, source="voice")
         elif "forward" in command or "go" in command:
-            self.motor.front(70)
+            self.motor.front(config.DEFAULT_SPEED)
             log_info("Nav: Moving forward")
         elif "backward" in command or "back" in command:
-            self.motor.back(50)
+            self.motor.back(config.DEFAULT_SPEED)
             log_info("Nav: Moving backward")
         elif "left" in command:
             self.motor.left()

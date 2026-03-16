@@ -4,11 +4,12 @@ Camera class for AI RC Car
 Captures frames using picamera2 library
 """
 
-import cv2
 import numpy as np
 import threading
+import time
 from picamera2 import Picamera2
 import config
+from utils.logger import log_error
 
 
 class Camera:
@@ -23,52 +24,38 @@ class Camera:
         self.latest_frame = None
         self.resolution = (config.CAMERA_WIDTH, config.CAMERA_HEIGHT)
 
-    def start(self):
-        """Start camera and background capture thread"""
+    def start(self) -> dict:
+        """Start camera and background capture thread."""
         if self.running:
-            return
+            return {"status": "ok", "action": "start", "note": "already_running"}
 
         self.camera = Picamera2()
 
-        # Configure camera
-        config = self.camera.create_preview_configuration(
+        cam_config = self.camera.create_preview_configuration(
             main={"size": self.resolution}, format="BGR888"
         )
-        self.camera.configure(config)
-
-        # Start camera
+        self.camera.configure(cam_config)
         self.camera.start()
 
-        # Start background capture thread
         self.running = True
         self.thread = threading.Thread(target=self._capture_loop, daemon=True)
         self.thread.start()
+        return {"status": "ok", "action": "start", "resolution": list(self.resolution)}
 
     def _capture_loop(self):
         """Background thread for continuous frame capture at 30fps"""
         while self.running:
             try:
-                # Capture frame
                 frame = self.camera.capture_array()
-
-                # Thread-safe update of latest frame
                 with self.lock:
                     self.latest_frame = frame
-
-                # 30fps = ~33ms per frame
-                import time
-
-                time.sleep(0.033)
-
+                time.sleep(0.033)  # ~30fps
             except Exception as e:
-                # Log error but keep running
-                print(f"Camera capture error: {e}")
-                import time
-
+                log_error(f"Camera capture error: {e}")
                 time.sleep(0.1)
 
-    def stop(self):
-        """Stop camera and background thread"""
+    def stop(self) -> dict:
+        """Stop camera and background thread."""
         self.running = False
 
         if self.thread:
@@ -79,17 +66,19 @@ class Camera:
             self.camera.close()
             self.camera = None
 
+        return {"status": "ok", "action": "stop"}
+
     def get_frame(self) -> np.ndarray | None:
-        """Returns latest frame (thread-safe)"""
+        """Returns latest frame (thread-safe)."""
         with self.lock:
             if self.latest_frame is not None:
                 return self.latest_frame.copy()
             return None
 
     def get_resolution(self) -> tuple[int, int]:
-        """Returns current resolution (width, height)"""
+        """Returns current resolution (width, height)."""
         return self.resolution
 
-    def cleanup(self):
-        """Clean shutdown"""
+    def cleanup(self) -> None:
+        """Clean shutdown."""
         self.stop()

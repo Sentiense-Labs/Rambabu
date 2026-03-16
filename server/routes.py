@@ -19,6 +19,7 @@ pan_tilt = None
 speaker = None
 mode_manager = None
 start_time = time.time()
+_last_obstacle_alert_time = 0.0
 
 
 def set_hardware_dependencies(m, c, u, pt, s, mm):
@@ -30,6 +31,11 @@ def set_hardware_dependencies(m, c, u, pt, s, mm):
     pan_tilt = pt
     speaker = s
     mode_manager = mm
+
+
+def _error_response(error_code: str, message: str, status: int = 500):
+    """Return structured error response per engineering guidelines."""
+    return jsonify({"error_code": error_code, "message": message}), status
 
 
 @routes.route("/")
@@ -44,45 +50,47 @@ def motor_action(action):
     valid_actions = ["front", "back", "left", "right", "stop"]
 
     if action not in valid_actions:
-        return jsonify({"error": f"Invalid action. Valid: {valid_actions}"}), 400
+        return _error_response(
+            "INVALID_ACTION",
+            f"Invalid action. Valid: {valid_actions}",
+            400,
+        )
 
     if not motor:
-        return jsonify({"error": "Motor not initialized"}), 500
+        return _error_response("MOTOR_STALL", "Motor not initialized")
 
     try:
-        speed = request.json.get("speed") if request.json else None
+        data = request.json or {}
+        speed = data.get("speed")
         log_info(f"API: POST /motor/{action} - speed: {speed}")
 
-        # ── Obstacle safety guard ─────────────────────────────────────────────
-        # Before driving forward, check that no obstacle is within STOP_DISTANCE.
-        # This mirrors the logic in tests/test_obstacle_detection.py so that the
-        # Flask server enforces the same safety threshold as the standalone test.
-        if action == "front" and ultrasonic:
-            distance = ultrasonic.get_distance()
-            if distance <= config.OBSTACLE_DETECTION_DISTANCE:
-                log_info(
-                    f"API: /motor/front BLOCKED — obstacle at {distance:.1f}cm "
-                    f"(<= {config.OBSTACLE_DETECTION_DISTANCE}cm)"
-                )
-                return jsonify(
-                    {
-                        "status": "blocked",
-                        "reason": "obstacle_detected",
-                        "distance_cm": round(distance, 1),
-                        "stop_distance_cm": config.OBSTACLE_DETECTION_DISTANCE,
-                        "message": "Object ahead",
-                        "detailed_message": (
-                            f"Obstacle detected at {distance:.1f}cm. "
-                            f"Cannot move forward (threshold: {config.OBSTACLE_DETECTION_DISTANCE}cm)."
-                        ),
-                    }
-                ), 409
-        # ─────────────────────────────────────────────────────────────────────
-
         if action == "front":
-            motor.front(speed or 70)
+            result = motor.front(speed or config.DEFAULT_SPEED)
+            if result.get("status") == "error":
+                # Motor refused — obstacle detected or latched
+                log_info(f"API: /motor/front BLOCKED — {result.get('message')}")
+
+                # Play obstacle alert with cooldown
+                global _last_obstacle_alert_time
+                now = time.time()
+                if speaker and (now - _last_obstacle_alert_time) >= config.OBSTACLE_ALERT_COOLDOWN:
+                    speaker.play_mp3_async(config.OBSTACLE_ALERT_AUDIO)
+                    _last_obstacle_alert_time = now
+
+                distance = ultrasonic.get_distance() if ultrasonic else 0
+                return (
+                    jsonify(
+                        {
+                            "error_code": result.get("error_code", "OBSTACLE_DETECTED"),
+                            "message": result.get("message"),
+                            "distance_cm": round(distance, 1),
+                            "stop_distance_cm": config.OBSTACLE_DETECTION_DISTANCE,
+                        }
+                    ),
+                    409,
+                )
         elif action == "back":
-            motor.back(speed or 50)
+            motor.back(speed or config.DEFAULT_SPEED)
         elif action == "left":
             motor.left()
         elif action == "right":
@@ -95,7 +103,7 @@ def motor_action(action):
 
     except Exception as e:
         log_error(f"API: Motor {action} failed - {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return _error_response("MOTOR_STALL", f"Motor {action} failed: {e}")
 
 
 @routes.route("/steering/<action>", methods=["POST"])
@@ -104,10 +112,14 @@ def steering_action(action):
     valid_actions = ["steer_left_hold", "steer_right_hold", "steer_center"]
 
     if action not in valid_actions:
-        return jsonify({"error": f"Invalid action. Valid: {valid_actions}"}), 400
+        return _error_response(
+            "INVALID_ACTION",
+            f"Invalid action. Valid: {valid_actions}",
+            400,
+        )
 
     if not motor:
-        return jsonify({"error": "Motor not initialized"}), 500
+        return _error_response("MOTOR_STALL", "Motor not initialized")
 
     try:
         log_info(f"API: POST /steering/{action}")
@@ -124,17 +136,20 @@ def steering_action(action):
 
     except Exception as e:
         log_error(f"API: Steering {action} failed - {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return _error_response("MOTOR_STALL", f"Steering {action} failed: {e}")
 
 
 @routes.route("/servo/pan", methods=["POST"])
 def servo_pan():
     """Control pan servo: angle or direction"""
     if not pan_tilt:
-        return jsonify({"error": "Pan-tilt not initialized"}), 500
+        return _error_response("SERVO_LIMIT", "Pan-tilt not initialized")
 
     try:
         data = request.json
+        if data is None:
+            return _error_response("INVALID_ACTION", "Request body required", 400)
+
         log_info(f"API: POST /servo/pan - params: {data}")
 
         if "angle" in data:
@@ -153,17 +168,20 @@ def servo_pan():
 
     except Exception as e:
         log_error(f"API: Pan servo failed - {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return _error_response("SERVO_LIMIT", f"Pan servo failed: {e}")
 
 
 @routes.route("/servo/tilt", methods=["POST"])
 def servo_tilt():
     """Control tilt servo: angle or direction"""
     if not pan_tilt:
-        return jsonify({"error": "Pan-tilt not initialized"}), 500
+        return _error_response("SERVO_LIMIT", "Pan-tilt not initialized")
 
     try:
         data = request.json
+        if data is None:
+            return _error_response("INVALID_ACTION", "Request body required", 400)
+
         log_info(f"API: POST /servo/tilt - params: {data}")
 
         if "angle" in data:
@@ -182,27 +200,27 @@ def servo_tilt():
 
     except Exception as e:
         log_error(f"API: Tilt servo failed - {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return _error_response("SERVO_LIMIT", f"Tilt servo failed: {e}")
 
 
 @routes.route("/servo/center", methods=["POST"])
 def servo_center():
-    """Center both servos to 90°"""
+    """Center both servos to 90deg"""
     if not pan_tilt:
-        return jsonify({"error": "Pan-tilt not initialized"}), 500
+        return _error_response("SERVO_LIMIT", "Pan-tilt not initialized")
 
     try:
         log_info("API: POST /servo/center")
         pan_tilt.center()
         angles = pan_tilt.get_angles()
-        log_info("API: Servos centered to 90°")
+        log_info("API: Servos centered to 90deg")
         return jsonify(
             {"status": "success", "pan": angles["pan"], "tilt": angles["tilt"]}
         )
 
     except Exception as e:
         log_error(f"API: Center servos failed - {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return _error_response("SERVO_LIMIT", f"Center servos failed: {e}")
 
 
 @routes.route("/mode/<mode>", methods=["POST"])
@@ -211,10 +229,14 @@ def set_mode(mode):
     valid_modes = ["AUTONOMOUS", "MANUAL", "STOPPED"]
 
     if mode not in valid_modes:
-        return jsonify({"error": f"Invalid mode. Valid: {valid_modes}"}), 400
+        return _error_response(
+            "INVALID_ACTION",
+            f"Invalid mode. Valid: {valid_modes}",
+            400,
+        )
 
     if not mode_manager:
-        return jsonify({"error": "Mode manager not initialized"}), 500
+        return _error_response("GPIO_FAILURE", "Mode manager not initialized")
 
     try:
         log_info(f"API: POST /mode/{mode}")
@@ -224,21 +246,24 @@ def set_mode(mode):
 
     except Exception as e:
         log_error(f"API: Set mode failed - {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return _error_response("GPIO_FAILURE", f"Set mode failed: {e}")
 
 
 @routes.route("/speak", methods=["POST"])
 def speak():
     """Text-to-speech"""
     if not speaker:
-        return jsonify({"error": "Speaker not initialized"}), 500
+        return _error_response("GPIO_FAILURE", "Speaker not initialized")
 
     try:
         data = request.json
+        if data is None:
+            return _error_response("INVALID_ACTION", "Request body required", 400)
+
         text = data.get("text", "")
 
         if not text:
-            return jsonify({"error": "No text provided"}), 400
+            return _error_response("INVALID_ACTION", "No text provided", 400)
 
         log_info(f"API: POST /speak - text: '{text}'")
         speaker.speak(text)
@@ -247,7 +272,7 @@ def speak():
 
     except Exception as e:
         log_error(f"API: Speak failed - {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return _error_response("GPIO_FAILURE", f"Speak failed: {e}")
 
 
 @routes.route("/status")
@@ -273,14 +298,14 @@ def get_status():
 
     except Exception as e:
         log_error(f"API: Get status failed - {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return _error_response("GPIO_FAILURE", f"Get status failed: {e}")
 
 
 @routes.route("/sensor/distance")
 def get_distance():
     """Get current ultrasonic distance reading and obstacle status"""
     if not ultrasonic:
-        return jsonify({"error": "Ultrasonic sensor not initialized"}), 500
+        return _error_response("SENSOR_TIMEOUT", "Ultrasonic sensor not initialized")
 
     try:
         distance = ultrasonic.get_distance()
@@ -301,14 +326,16 @@ def get_distance():
 
     except Exception as e:
         log_error(f"API: Get distance failed - {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return _error_response("SENSOR_TIMEOUT", f"Get distance failed: {e}")
 
 
 @routes.route("/video_feed")
 def video_feed():
     """MJPEG video stream"""
     if not camera:
-        return "Camera not available", 500
+        return _error_response("CAMERA_ERROR", "Camera not available")
+
+    import cv2
 
     log_info("API: Video stream started")
 
@@ -317,9 +344,6 @@ def video_feed():
             while True:
                 frame = camera.get_frame()
                 if frame is not None:
-                    # Encode frame as JPEG
-                    import cv2
-
                     ret, jpeg = cv2.imencode(".jpg", frame)
                     if ret:
                         yield (
@@ -330,8 +354,6 @@ def video_feed():
                         )
 
                 # ~15fps
-                import time
-
                 time.sleep(0.067)
 
         except Exception as e:
@@ -345,10 +367,13 @@ def video_feed():
 @routes.errorhandler(404)
 def not_found(error):
     """Handle 404 errors"""
-    return jsonify({"error": "Not found"}), 404
+    return jsonify({"error_code": "NOT_FOUND", "message": "Not found"}), 404
 
 
 @routes.errorhandler(500)
 def internal_error(error):
     """Handle 500 errors"""
-    return jsonify({"error": "Internal server error"}), 500
+    return (
+        jsonify({"error_code": "INTERNAL_ERROR", "message": "Internal server error"}),
+        500,
+    )

@@ -5,6 +5,7 @@ import face_recognition
 import cv2
 import os
 import numpy as np
+from utils.logger import log_info
 
 # ----------------------------
 # Load Known Faces
@@ -20,7 +21,7 @@ for file in os.listdir("known_faces"):
             known_encodings.append(encodings[0])
             known_names.append(os.path.splitext(file)[0])
 
-print("Known faces loaded:", known_names)
+log_info(f"Known faces loaded: {known_names}")
 
 # ----------------------------
 # Start Camera
@@ -113,8 +114,8 @@ class CamHandler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(jpeg.tobytes())
                     self.wfile.write(b"\r\n")
 
-            except:
-                pass
+            except Exception:
+                return
 
         else:
             self.send_response(200)
@@ -134,5 +135,5 @@ class ThreadingServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 
 with ThreadingServer(("", PORT), CamHandler) as httpd:
-    print(f"Face recognition running at http://<your-pi-ip>:{PORT}")
+    log_info(f"Face recognition running on port {PORT}")
     httpd.serve_forever()

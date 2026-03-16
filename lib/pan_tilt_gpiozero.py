@@ -175,5 +175,5 @@ class PanTilt:
             self.center()
             self.pan_servo.close()
             self.tilt_servo.close()
-        except Exception:
-            pass  # Ignore cleanup errors
+        except Exception as e:
+            log_warning(f"Pan-tilt cleanup error: {e}")

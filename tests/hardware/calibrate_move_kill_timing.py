@@ -23,34 +23,34 @@ def prompt_yes_no(message: str, default: bool = True) -> bool:
 
 def test_delay(pan_tilt: PanTilt, delay: float) -> bool:
     print(f"\n--- Testing delay: {delay}s ---")
-    
+
     # Temporarily update delay
     original_delay = config.SERVO_MOVE_DELAY
     config.SERVO_MOVE_DELAY = delay
-    
+
     try:
         # Move from 90 to 120
         print("Moving pan: 90° → 120°")
         pan_tilt.pan_to(120)
-        
+
         reached = prompt_yes_no(
             "Did servo reach 120° fully and smoothly?",
             default=True,
         )
         if not reached:
             return False
-        
+
         # Move back to 90
         print("Moving pan: 120° → 90°")
         pan_tilt.pan_to(90)
-        
+
         reached = prompt_yes_no(
             "Did servo reach 90° fully and smoothly?",
             default=True,
         )
         if not reached:
             return False
-        
+
         # Check for jitter after stop
         jitter = prompt_yes_no(
             "Is servo completely still (no jitter) after movement?",
@@ -59,7 +59,7 @@ def test_delay(pan_tilt: PanTilt, delay: float) -> bool:
         if not jitter:
             print(f"Delay {delay}s causes jitter")
             return False
-        
+
         print(f"Delay {delay}s works well")
         return True
     finally:

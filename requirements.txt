@@ -1,6 +1,5 @@
 # Core
 RPi.GPIO>=0.7.1
-pigpio>=1.78
 
 # Vision
 picamera2>=0.3.17
@@ -19,6 +18,9 @@ pyttsx3>=2.90
 
 # faster-whisper for offline STT
 faster-whisper>=0.10.0
+
+# Wake word detection
+openwakeword>=0.6.0
 
 # MQTT & AWS
 paho-mqtt>=2.0.0

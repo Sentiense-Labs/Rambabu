@@ -31,7 +31,6 @@ MOVES = [
 ]
 
 
-
 def main() -> int:
     pan_tilt = None
     GPIO.setwarnings(False)
@@ -40,7 +39,9 @@ def main() -> int:
     try:
         pan_tilt = PanTilt()
         pan_tilt.set_as_current_center()
-        print("Starting movement test from current 90°/90° position with no initial command")
+        print(
+            "Starting movement test from current 90°/90° position with no initial command"
+        )
 
         for pan_angle, tilt_angle, label in MOVES:
             print(f"{label}: pan={pan_angle}°, tilt={tilt_angle}°")

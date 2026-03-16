@@ -1,4 +1,4 @@
-/.venv
+.venv
 __pycache__
 *.pyc
 *.pyo
@@ -7,5 +7,13 @@ __pycache__
 *.DS_Store
 Thumbs.db
 .env
-.venv
 .lgd-nfy0
+
+# Security - certificates and keys
+certs/
+*.pem
+*.key
+*.crt
+
+# Logs
+logs/

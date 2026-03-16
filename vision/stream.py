@@ -6,8 +6,12 @@ Generates video frames with optional detection overlay
 
 import cv2
 import time
-from typing import Optional, Generator, Tuple
+from typing import Generator
+import numpy as np
 from utils.logger import log_debug, log_error
+
+# Stream frame rate
+STREAM_FPS: int = 15
 
 
 def generate_frames(camera, detector=None) -> Generator[bytes, None, None]:
@@ -65,7 +69,7 @@ def generate_frames(camera, detector=None) -> Generator[bytes, None, None]:
             elapsed = time.time() - start_time
             if elapsed > 0:
                 fps = frame_count / elapsed
-                target_interval = 1.0 / 15.0  # 15fps
+                target_interval = 1.0 / STREAM_FPS
                 actual_interval = 1.0 / fps
                 if actual_interval < target_interval:
                     time.sleep(target_interval - actual_interval)
@@ -75,7 +79,7 @@ def generate_frames(camera, detector=None) -> Generator[bytes, None, None]:
         raise
 
 
-def add_detection_overlay(frame, detector) -> Tuple:
+def add_detection_overlay(frame: np.ndarray, detector) -> np.ndarray:
     """
     Add detection bounding boxes and labels to frame
 
@@ -115,7 +119,7 @@ def add_detection_overlay(frame, detector) -> Tuple:
         return frame
 
 
-def add_info_overlay(frame) -> Tuple:
+def add_info_overlay(frame: np.ndarray) -> np.ndarray:
     """
     Add information overlay to frame
 
@@ -141,7 +145,7 @@ def add_info_overlay(frame) -> Tuple:
         )
 
         # Add frame rate
-        fps = "15 FPS"
+        fps = f"{STREAM_FPS} FPS"
         cv2.putText(
             frame,
             fps,

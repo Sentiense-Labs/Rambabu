@@ -8,6 +8,7 @@ import RPi.GPIO as GPIO
 import time
 import threading
 import config
+from utils.logger import log_warning
 
 
 class Ultrasonic:
@@ -80,23 +81,25 @@ class Ultrasonic:
                 with self.lock:
                     self.last_distance = distance
 
-                time.sleep(0.05)  # 20Hz = 50ms interval
+                time.sleep(config.ULTRASONIC_POLL_INTERVAL)
             except Exception as e:
-                # Silently log errors to prevent spam
-                pass
+                log_warning(f"Ultrasonic measurement error (SENSOR_TIMEOUT): {e}")
+                time.sleep(0.1)  # Back off on error
 
-    def start(self):
-        """Start background measurement thread"""
+    def start(self) -> dict:
+        """Start background measurement thread."""
         if not self.running:
             self.running = True
             self.thread = threading.Thread(target=self._measurement_loop, daemon=True)
             self.thread.start()
+        return {"status": "ok", "action": "start"}
 
-    def stop(self):
-        """Stop background measurement thread"""
+    def stop(self) -> dict:
+        """Stop background measurement thread."""
         self.running = False
         if self.thread:
             self.thread.join(timeout=1.0)
+        return {"status": "ok", "action": "stop"}
 
     def wait_for_reading(self, timeout: float = 2.0) -> bool:
         """Wait for a valid sensor reading (not the initial 999.0)"""
@@ -109,16 +112,16 @@ class Ultrasonic:
         return False
 
     def get_distance(self) -> float:
-        """Returns last measured distance in cm (thread-safe)"""
+        """Returns last measured distance in cm (thread-safe)."""
         with self.lock:
             return self.last_distance
 
-    def is_clear(self, threshold: int = 30) -> bool:
-        """Returns True if path is clear (distance > threshold)"""
+    def is_clear(self, threshold: int = config.SAFE_DISTANCE) -> bool:
+        """Returns True if path is clear (distance > threshold)."""
         return self.get_distance() > threshold
 
-    def is_blocked(self, threshold: int = 20) -> bool:
-        """Returns True if obstacle detected (distance < threshold)"""
+    def is_blocked(self, threshold: int = config.STOP_DISTANCE) -> bool:
+        """Returns True if obstacle detected (distance < threshold)."""
         return self.get_distance() < threshold
 
     def get_zone(self) -> str:
