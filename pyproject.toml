@@ -25,14 +25,20 @@ dependencies = [
     "awsiotsdk>=1.20.0",
     "flask>=3.0.0",
     "flask-cors>=4.0.0",
+    "bless>=0.2.2",
     "typing-extensions>=4.15.0",
 ]
 requires-python = ">=3.10"
 
 [tool.uv]
 # tflite-runtime has no wheels for Python 3.13 — we use ONNX inference instead
-override-dependencies = ["tflite-runtime ; python_version < '0'"]
-dev-dependencies = [
+override-dependencies = [
+    "tflite-runtime ; python_version < '0'",
+    "bleak>=0.19.0,<0.21.0",
+]
+
+[dependency-groups]
+dev = [
     "pytest>=7.0.0",
     "black>=23.0.0",
     "ruff>=0.1.0",

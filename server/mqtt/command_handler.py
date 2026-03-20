@@ -36,6 +36,8 @@ class CommandHandler:
 
         speed = data.get("speed")
         angle = data.get("angle")
+        pan_angle = data.get("panservoangle", angle)   # IoT platform field name
+        tilt_angle = data.get("tiltservoangle", angle) # IoT platform field name
         degrees = data.get("degrees", 10)
 
         match action:
@@ -71,8 +73,8 @@ class CommandHandler:
 
             # Pan servo (absolute)
             case Action.SERVO_PAN_TO if self._pan_tilt:
-                if angle is not None:
-                    self._pan_tilt.pan_to(int(angle))
+                if pan_angle is not None:
+                    self._pan_tilt.pan_to(int(pan_angle))
 
             # Pan servo (relative)
             case Action.SERVO_PAN_LEFT if self._pan_tilt:
@@ -82,8 +84,8 @@ class CommandHandler:
 
             # Tilt servo (absolute)
             case Action.SERVO_TILT_TO if self._pan_tilt:
-                if angle is not None:
-                    self._pan_tilt.tilt_to(int(angle))
+                if tilt_angle is not None:
+                    self._pan_tilt.tilt_to(int(tilt_angle))
 
             # Tilt servo (relative)
             case Action.SERVO_TILT_UP if self._pan_tilt:

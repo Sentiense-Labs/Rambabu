@@ -74,12 +74,18 @@ TILT_MAX: Final[int] = 105  # Looking up
 PAN_OFFSET: Final[int] = 0
 TILT_OFFSET: Final[int] = 0
 
+# Direction multipliers — flip to -1 if servo is physically mounted in reverse
+# +1 = standard (left decreases angle, right increases angle, up increases angle)
+# -1 = reversed (flip if movement is opposite to expected)
+PAN_DIRECTION: Final[int] = -1   # Reversed — pan servo mounted mirrored
+TILT_DIRECTION: Final[int] = -1  # Reversed — tilt servo mounted inverted
+
 
 # ============================================================================
 # PWM FREQUENCIES (Hz)
 # ============================================================================
 
-MOTOR_PWM_FREQ: Final[int] = 1000  # L9110S motor driver PWM frequency
+MOTOR_PWM_FREQ: Final[int] = 100   # L9110S motor driver PWM frequency
 SERVO_PWM_FREQ: Final[int] = 50  # SG90 servo standard frequency
 
 # Move and Kill timing
@@ -90,8 +96,8 @@ SERVO_MOVE_DELAY: Final[float] = 0.3  # Seconds to wait before killing PWM
 # CAMERA SETTINGS
 # ============================================================================
 
-CAMERA_WIDTH: Final[int] = 640  # Frame width (pixels)
-CAMERA_HEIGHT: Final[int] = 480  # Frame height (pixels)
+CAMERA_WIDTH: Final[int] = 1920  # Frame width (pixels)
+CAMERA_HEIGHT: Final[int] = 1080  # Frame height (pixels)
 CAMERA_FPS: Final[int] = 30  # Frames per second
 
 

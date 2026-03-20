@@ -115,25 +115,25 @@ class PanTilt:
 
     def pan_left(self, deg: int = 10) -> dict:
         """Pan left by given degrees."""
-        result = self.pan_to(self.pan_angle - deg)
+        result = self.pan_to(self.pan_angle - deg * config.PAN_DIRECTION)
         log_info(f"Camera: Pan left {deg}")
         return result
 
     def pan_right(self, deg: int = 10) -> dict:
         """Pan right by given degrees."""
-        result = self.pan_to(self.pan_angle + deg)
+        result = self.pan_to(self.pan_angle + deg * config.PAN_DIRECTION)
         log_info(f"Camera: Pan right {deg}")
         return result
 
     def tilt_up(self, deg: int = 10) -> dict:
         """Tilt up by given degrees."""
-        result = self.tilt_to(self.tilt_angle + deg)
+        result = self.tilt_to(self.tilt_angle + deg * config.TILT_DIRECTION)
         log_info(f"Camera: Tilt up {deg}")
         return result
 
     def tilt_down(self, deg: int = 10) -> dict:
         """Tilt down by given degrees."""
-        result = self.tilt_to(self.tilt_angle - deg)
+        result = self.tilt_to(self.tilt_angle - deg * config.TILT_DIRECTION)
         log_info(f"Camera: Tilt down {deg}")
         return result
 

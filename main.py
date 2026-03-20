@@ -17,6 +17,7 @@ from lib.speaker import Speaker
 from server.app import create_app
 from server.mqtt.client import MqttClient
 from server.mqtt.command_handler import CommandHandler
+from lib.bluetooth_server import BluetoothServer
 import config
 
 # Global references for cleanup
@@ -28,6 +29,7 @@ flask_app = None
 flask_thread = None
 obstacle_monitor_thread = None
 mqtt_client = None
+ble_server = None
 
 # Commented out for testing
 # pan_tilt = None
@@ -79,7 +81,12 @@ def cleanup():
     """Clean up all hardware resources in reverse order"""
     log_info("=== Starting Shutdown Sequence ===")
 
-    global motor, pan_tilt, ultrasonic, speaker, flask_thread, mqtt_client
+    global motor, pan_tilt, ultrasonic, speaker, flask_thread, mqtt_client, ble_server
+
+    # Stop BLE server
+    if ble_server:
+        log_info("Stopping BLE server...")
+        ble_server.cleanup()
 
     # Stop MQTT first
     if mqtt_client:
@@ -132,7 +139,7 @@ def run_flask_server():
 
 def main():
     """Main entry point"""
-    global motor, pan_tilt, ultrasonic, speaker, flask_app, flask_thread, obstacle_monitor_thread, mqtt_client
+    global motor, pan_tilt, ultrasonic, speaker, flask_app, flask_thread, obstacle_monitor_thread, mqtt_client, ble_server
 
     # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)
@@ -222,7 +229,16 @@ def main():
         else:
             log_error(f"MQTT connection failed: {mqtt_result}")
 
-        # 8. Keep main thread alive
+        # 8. Start BLE GATT server
+        log_info("Starting BLE server...")
+        ble_server = BluetoothServer(motor=motor, pan_tilt=pan_tilt, speaker=speaker)
+        ble_result = ble_server.start()
+        if ble_result["status"] == "ok":
+            log_info("BLE server started — phone can now connect to 'RC-Car'")
+        else:
+            log_error(f"BLE server failed: {ble_result}")
+
+        # 9. Keep main thread alive
         log_info("System running - press Ctrl+C to stop")
         while True:
             time.sleep(1)

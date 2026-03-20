@@ -32,7 +32,7 @@ class Camera:
         self.camera = Picamera2()
 
         cam_config = self.camera.create_preview_configuration(
-            main={"size": self.resolution}, format="BGR888"
+            main={"size": self.resolution, "format": "RGB888"}
         )
         self.camera.configure(cam_config)
         self.camera.start()
