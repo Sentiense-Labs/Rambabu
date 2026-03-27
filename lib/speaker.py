@@ -33,11 +33,79 @@ class Speaker:
         self._volume = config.SPEAKER_VOLUME
 
         self._use_bluetooth = config.SPEAKER_OUTPUT == "bluetooth"
+        self._bt_mac: str = config.BT_SPEAKER_MAC
+        self._bt_name: str = config.BT_SPEAKER_NAME
 
         if self._use_bluetooth:
+            self._discover_bt_speaker()
             self._ensure_connected()
         self._init_engine()
         self.start()
+
+    # ------------------------------------------------------------------
+    # Bluetooth discovery
+    # ------------------------------------------------------------------
+
+    def _discover_bt_speaker(self) -> None:
+        """Auto-detect the connected BT audio device.
+
+        Tries `bluetoothctl devices Connected` first (fast path).
+        Falls back to scanning all paired devices for an AudioSink UUID.
+        If nothing is found, keeps the config defaults (BT_SPEAKER_MAC/NAME).
+        """
+        mac, name = self._find_connected_bt_device()
+        if mac is None:
+            mac, name = self._find_paired_audio_device()
+
+        if mac is not None:
+            self._bt_mac = mac
+            self._bt_name = name
+            log_info(f"Auto-discovered BT speaker: {name} ({mac})")
+        else:
+            log_warning(
+                f"No BT audio device found — falling back to config: "
+                f"{config.BT_SPEAKER_NAME} ({config.BT_SPEAKER_MAC})"
+            )
+
+    def _find_connected_bt_device(self) -> tuple[str | None, str]:
+        """Return (mac, name) of the first currently-connected BT device."""
+        try:
+            result = subprocess.run(
+                ["bluetoothctl", "devices", "Connected"],
+                capture_output=True, text=True, timeout=5,
+            )
+            for line in result.stdout.splitlines():
+                parts = line.strip().split(" ", 2)
+                if len(parts) >= 3 and parts[0] == "Device":
+                    return parts[1], parts[2]
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+        return None, ""
+
+    def _find_paired_audio_device(self) -> tuple[str | None, str]:
+        """Return (mac, name) of the first paired device with an AudioSink UUID."""
+        try:
+            result = subprocess.run(
+                ["bluetoothctl", "devices"],
+                capture_output=True, text=True, timeout=5,
+            )
+            for line in result.stdout.splitlines():
+                parts = line.strip().split(" ", 2)
+                if len(parts) < 3 or parts[0] != "Device":
+                    continue
+                mac, name = parts[1], parts[2]
+                try:
+                    info = subprocess.run(
+                        ["bluetoothctl", "info", mac],
+                        capture_output=True, text=True, timeout=5,
+                    )
+                    if "0000110b" in info.stdout.lower():
+                        return mac, name
+                except (subprocess.TimeoutExpired, OSError):
+                    continue
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+        return None, ""
 
     # ------------------------------------------------------------------
     # Bluetooth connection
@@ -46,7 +114,7 @@ class Speaker:
     def _ensure_connected(self) -> None:
         """Connect to the BT speaker if not already connected."""
         if self.is_connected():
-            log_info(f"Speaker {config.BT_SPEAKER_NAME} already connected")
+            log_info(f"Speaker {self._bt_name} already connected")
             self._set_default_sink()
             return
 
@@ -60,7 +128,7 @@ class Speaker:
             return False
         try:
             output = subprocess.run(
-                ["bluetoothctl", "info", config.BT_SPEAKER_MAC],
+                ["bluetoothctl", "info", self._bt_mac],
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -77,7 +145,7 @@ class Speaker:
                     "message": "Bluetooth disabled — using hardware speaker"}
         try:
             result = subprocess.run(
-                ["bluetoothctl", "connect", config.BT_SPEAKER_MAC],
+                ["bluetoothctl", "connect", self._bt_mac],
                 capture_output=True,
                 text=True,
                 timeout=config.BT_CONNECT_TIMEOUT,
@@ -86,12 +154,12 @@ class Speaker:
             if result.returncode != 0 or "Failed" in result.stdout:
                 log_error(f"BT connect failed: {result.stdout.strip()}")
                 return {"status": "error", "error_code": "BT_CONNECT_FAILED",
-                        "message": f"Could not connect to {config.BT_SPEAKER_NAME}"}
+                        "message": f"Could not connect to {self._bt_name}"}
 
             self._set_default_sink()
-            log_info(f"Connected to {config.BT_SPEAKER_NAME}")
+            log_info(f"Connected to {self._bt_name}")
             return {"status": "ok", "action": "connect",
-                    "speaker": config.BT_SPEAKER_NAME}
+                    "speaker": self._bt_name}
 
         except subprocess.TimeoutExpired:
             log_error("BT connect timed out")
@@ -109,7 +177,7 @@ class Speaker:
                     "message": "Bluetooth disabled — using hardware speaker"}
         try:
             subprocess.run(
-                ["bluetoothctl", "disconnect", config.BT_SPEAKER_MAC],
+                ["bluetoothctl", "disconnect", self._bt_mac],
                 capture_output=True,
                 text=True,
                 timeout=5,

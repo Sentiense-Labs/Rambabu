@@ -25,7 +25,12 @@ class CommandHandler:
         """
         # IoT platform wraps commands in {"data": {...}}
         data = payload.get("data", payload)
-        raw_action = data.get("action", "") or data.get("servoactions", "")
+        raw_action = (
+            data.get("action")
+            or data.get("servoactions")
+            or data.get("cameraactions")
+            or ""
+        )
         log_info(f"CommandHandler: {raw_action} — {data}")
 
         try:
@@ -76,7 +81,7 @@ class CommandHandler:
                 if pan_angle is not None:
                     self._pan_tilt.pan_to(int(pan_angle))
 
-            # Pan servo (relative)
+            # Pan servo (relative, single step)
             case Action.SERVO_PAN_LEFT if self._pan_tilt:
                 self._pan_tilt.pan_left(int(degrees))
             case Action.SERVO_PAN_RIGHT if self._pan_tilt:
@@ -87,13 +92,37 @@ class CommandHandler:
                 if tilt_angle is not None:
                     self._pan_tilt.tilt_to(int(tilt_angle))
 
-            # Tilt servo (relative)
+            # Tilt servo (relative, single step)
             case Action.SERVO_TILT_UP if self._pan_tilt:
                 self._pan_tilt.tilt_up(int(degrees))
             case Action.SERVO_TILT_DOWN if self._pan_tilt:
                 self._pan_tilt.tilt_down(int(degrees))
 
-            # Pan-tilt center
+            # ── Joystick continuous: 4 cardinals ──────────────────────────────
+            case Action.SERVO_UP_START if self._pan_tilt:
+                self._pan_tilt.tilt_up_start()
+            case Action.SERVO_DOWN_START if self._pan_tilt:
+                self._pan_tilt.tilt_down_start()
+            case Action.SERVO_LEFT_START if self._pan_tilt:
+                self._pan_tilt.pan_left_start()
+            case Action.SERVO_RIGHT_START if self._pan_tilt:
+                self._pan_tilt.pan_right_start()
+
+            # ── Joystick continuous: 4 diagonals ──────────────────────────────
+            case Action.SERVO_UP_LEFT_START if self._pan_tilt:
+                self._pan_tilt.up_left_start()
+            case Action.SERVO_UP_RIGHT_START if self._pan_tilt:
+                self._pan_tilt.up_right_start()
+            case Action.SERVO_DOWN_LEFT_START if self._pan_tilt:
+                self._pan_tilt.down_left_start()
+            case Action.SERVO_DOWN_RIGHT_START if self._pan_tilt:
+                self._pan_tilt.down_right_start()
+
+            # ── Stop continuous movement ───────────────────────────────────────
+            case Action.SERVO_STOP if self._pan_tilt:
+                self._pan_tilt.servo_stop()
+
+            # ── Smooth return to center ────────────────────────────────────────
             case Action.SERVO_CENTER if self._pan_tilt:
                 self._pan_tilt.center()
 

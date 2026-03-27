@@ -148,11 +148,11 @@ FLASK_PORT: Final[int] = 5000  # Web dashboard port
 # SPEAKER SETTINGS
 # ============================================================================
 
-# "bluetooth" = STONE 300 via BT | "hardware" = wired speaker (not yet set up)
+# "bluetooth" = BT speaker | "hardware" = wired speaker (not yet set up)
 SPEAKER_OUTPUT: Final[str] = "bluetooth"
 
-BT_SPEAKER_MAC: Final[str] = "6E:8F:35:8A:8E:67"
-BT_SPEAKER_NAME: Final[str] = "STONE 300"
+BT_SPEAKER_MAC: Final[str] = "04:21:44:04:74:62"
+BT_SPEAKER_NAME: Final[str] = "SRS-XB12"
 BT_CONNECT_TIMEOUT: Final[int] = 10  # Seconds to wait for BT connection
 BT_SINK_WAIT: Final[float] = 3.0  # Seconds to wait for PulseAudio sink
 

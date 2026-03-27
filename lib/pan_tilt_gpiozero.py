@@ -1,179 +1,269 @@
 #!/usr/bin/env python3
 """
-PanTilt class for AI RC Car
-Controls pan and tilt servos using hardware PWM (gpiozero + lgpio)
+PanTilt class for AI RC Car.
+Controls pan/tilt servos via sysfs hardware PWM on Pi 5 (RP1 chip).
+
+Mapping (confirmed on Pi 5):
+  GPIO 12 (Pan)  → pwmchip0 / pwm0
+  GPIO 13 (Tilt) → pwmchip0 / pwm1
+
+config.txt must have:
+  dtoverlay=pwm-2chan,pin=12,func=0,pin2=13,func2=0
 """
 
-from gpiozero import AngularServo
-from gpiozero.pins.lgpio import LGPIOFactory
+import os
+import threading
 from time import sleep
 import config
 from utils.logger import log_debug, log_info, log_warning
 
+# Sysfs PWM chip/channel mapping for Pi 5
+_PWM_CHIP = 0
+_PAN_CHANNEL = 0   # GPIO 12
+_TILT_CHANNEL = 1  # GPIO 13
+
+# Servo PWM timing (nanoseconds)
+_PERIOD_NS = 20_000_000   # 20ms = 50Hz
+_MIN_DUTY_NS = 500_000    # 0.5ms = 0°
+_MAX_DUTY_NS = 2_500_000  # 2.5ms = 180°
+
+# Continuous movement
+_STEP_DEG: int = 1
+_TICK_SEC: float = 0.05
+
+
+class _HardwarePWM:
+    """Sysfs hardware PWM channel wrapper."""
+
+    def __init__(self, chip: int, channel: int) -> None:
+        self._chip = chip
+        self._channel = channel
+        self._base = f"/sys/class/pwm/pwmchip{chip}/pwm{channel}"
+        self._export()
+
+    def _write(self, filename: str, value: int) -> None:
+        with open(f"{self._base}/{filename}", "w") as f:
+            f.write(str(value))
+
+    def _export(self) -> None:
+        export_path = f"/sys/class/pwm/pwmchip{self._chip}/export"
+        try:
+            with open(export_path, "w") as f:
+                f.write(str(self._channel))
+        except OSError:
+            pass  # Already exported
+        sleep(0.1)
+        self._write("period", _PERIOD_NS)
+        self._write("duty_cycle", 0)
+
+    def set_angle(self, angle: float) -> None:
+        """Set servo to angle (0–180°)."""
+        duty_ns = int(_MIN_DUTY_NS + (angle / 180.0) * (_MAX_DUTY_NS - _MIN_DUTY_NS))
+        duty_ns = max(_MIN_DUTY_NS, min(duty_ns, _MAX_DUTY_NS))
+        self._write("duty_cycle", duty_ns)
+
+    def enable(self) -> None:
+        self._write("enable", 1)
+
+    def disable(self) -> None:
+        self._write("enable", 0)
+
+    def close(self) -> None:
+        try:
+            self.disable()
+            unexport = f"/sys/class/pwm/pwmchip{self._chip}/unexport"
+            with open(unexport, "w") as f:
+                f.write(str(self._channel))
+        except OSError:
+            pass
+
 
 class PanTilt:
-    """Controls pan and tilt servos using hardware PWM for jitter-free operation."""
+    """Controls pan/tilt servos via sysfs hardware PWM — jitter-free on Pi 5."""
 
-    def __init__(self):
-        """Initialize pan-tilt servos with hardware PWM."""
-        # Force hardware PWM via lgpio factory
-        factory = LGPIOFactory()
+    def __init__(self) -> None:
+        self._pan_pwm = _HardwarePWM(_PWM_CHIP, _PAN_CHANNEL)
+        self._tilt_pwm = _HardwarePWM(_PWM_CHIP, _TILT_CHANNEL)
 
-        # Initialize pan servo on GPIO 12 (hardware PWM0)
-        # Use default angle range (-90 to 90) and map our angles in methods
-        self.pan_servo = AngularServo(
-            config.PAN_SERVO,
-            min_pulse_width=0.5 / 1000,  # 0.5ms
-            max_pulse_width=2.5 / 1000,  # 2.5ms
-            pin_factory=factory,
-        )
-
-        # Initialize tilt servo on GPIO 13 (hardware PWM1)
-        # Use default angle range (-90 to 90) and map our angles in methods
-        self.tilt_servo = AngularServo(
-            config.TILT_SERVO,
-            min_pulse_width=0.5 / 1000,
-            max_pulse_width=2.5 / 1000,
-            pin_factory=factory,
-        )
-
-        # Track current angles
         self.pan_angle = config.PAN_CENTER
         self.tilt_angle = config.TILT_CENTER
 
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+
+        # Center on boot
+        self._pan_pwm.set_angle(config.PAN_CENTER)
+        self._tilt_pwm.set_angle(config.TILT_CENTER)
+        self._pan_pwm.enable()
+        self._tilt_pwm.enable()
+        sleep(config.SERVO_MOVE_DELAY)
+
         log_info(
-            f"Camera: Pan-tilt initialized with hardware PWM "
-            f"({self.pan_angle}°/{self.tilt_angle}°)"
+            f"PanTilt: hardware PWM ready — "
+            f"pan={self.pan_angle}° tilt={self.tilt_angle}°"
         )
 
-    def _clamp_angle(self, angle: int, min_angle: int, max_angle: int) -> int:
-        """Clamp angle to valid range."""
-        return max(min_angle, min(angle, max_angle))
+    # ── Internals ──────────────────────────────────────────────────────────
 
-    def _apply_offset(self, angle: int, offset: int) -> int:
-        """Apply calibration offset to a logical angle."""
-        return angle + offset
+    def _clamp(self, value: int, lo: int, hi: int) -> int:
+        return max(lo, min(value, hi))
 
-    def set_as_current_center(self) -> None:
-        """Mark current physical position as 90°/90° reference."""
-        self.pan_angle = config.PAN_CENTER
-        self.tilt_angle = config.TILT_CENTER
-        log_info(
-            f"Camera: Current physical position set as center "
-            f"({self.pan_angle}°/{self.tilt_angle}°)"
-        )
+    def _apply_pan(self, logical_angle: int) -> None:
+        servo_angle = self._clamp(logical_angle + config.PAN_OFFSET, 0, 180)
+        self._pan_pwm.set_angle(servo_angle)
 
-    def pan_to(self, angle: int) -> None:
-        """Pan to absolute angle using hardware PWM."""
-        old_angle = self.pan_angle
-        clamped_angle = self._clamp_angle(angle, config.PAN_MIN, config.PAN_MAX)
+    def _apply_tilt(self, logical_angle: int) -> None:
+        servo_angle = self._clamp(logical_angle + config.TILT_OFFSET, 0, 180)
+        self._tilt_pwm.set_angle(servo_angle)
 
-        if clamped_angle != angle:
-            log_warning(f"Pan angle {angle}° clamped to {clamped_angle}°")
+    def _stop_current_movement(self) -> None:
+        if self._thread and self._thread.is_alive():
+            self._stop_event.set()
+            self._thread.join(timeout=1.0)
+        self._stop_event.clear()
+        self._thread = None
 
-        if clamped_angle != old_angle:
-            servo_angle = self._apply_offset(clamped_angle, config.PAN_OFFSET)
-            # Map 0-180 to -90 to 90 for gpiozero
-            gpiozero_angle = servo_angle - 90
-            self.pan_servo.angle = gpiozero_angle
-            sleep(config.SERVO_MOVE_DELAY)
-            self.pan_angle = clamped_angle
-            log_info(f"Pan: {old_angle}° → {clamped_angle}°")
-        else:
-            log_debug(f"Pan already at {clamped_angle}°, no movement")
+    def _start_movement(self, pan_delta: int, tilt_delta: int) -> None:
+        self._stop_current_movement()
 
-    def tilt_to(self, angle: int) -> None:
-        """Tilt to absolute angle using hardware PWM."""
-        old_angle = self.tilt_angle
-        clamped_angle = self._clamp_angle(angle, config.TILT_MIN, config.TILT_MAX)
+        def _loop() -> None:
+            while not self._stop_event.is_set():
+                if pan_delta != 0:
+                    new_pan = self._clamp(
+                        self.pan_angle + pan_delta, config.PAN_MIN, config.PAN_MAX
+                    )
+                    if new_pan != self.pan_angle:
+                        self._apply_pan(new_pan)
+                        self.pan_angle = new_pan
 
-        if clamped_angle != angle:
-            log_warning(f"Tilt angle {angle}° clamped to {clamped_angle}°")
+                if tilt_delta != 0:
+                    new_tilt = self._clamp(
+                        self.tilt_angle + tilt_delta, config.TILT_MIN, config.TILT_MAX
+                    )
+                    if new_tilt != self.tilt_angle:
+                        self._apply_tilt(new_tilt)
+                        self.tilt_angle = new_tilt
 
-        if clamped_angle != old_angle:
-            servo_angle = self._apply_offset(clamped_angle, config.TILT_OFFSET)
-            # Map 0-180 to -90 to 90 for gpiozero
-            gpiozero_angle = servo_angle - 90
-            self.tilt_servo.angle = gpiozero_angle
-            sleep(config.SERVO_MOVE_DELAY)
-            self.tilt_angle = clamped_angle
-            log_info(f"Tilt: {old_angle}° → {clamped_angle}°")
-        else:
-            log_debug(f"Tilt already at {clamped_angle}°, no movement")
+                self._stop_event.wait(_TICK_SEC)
 
-    def pan_left(self, deg: int = 10) -> None:
-        """Pan left by given degrees."""
-        new_angle = self.pan_angle - deg
-        self.pan_to(new_angle)
-        log_info(f"Camera: Pan left {deg}°")
+        self._thread = threading.Thread(target=_loop, daemon=True)
+        self._thread.start()
 
-    def pan_right(self, deg: int = 10) -> None:
-        """Pan right by given degrees."""
-        new_angle = self.pan_angle + deg
-        self.pan_to(new_angle)
-        log_info(f"Camera: Pan right {deg}°")
+    # ── Absolute positioning ───────────────────────────────────────────────
 
-    def tilt_up(self, deg: int = 10) -> None:
-        """Tilt up by given degrees."""
-        new_angle = self.tilt_angle + deg
-        self.tilt_to(new_angle)
-        log_info(f"Camera: Tilt up {deg}°")
+    def pan_to(self, angle: int) -> dict:
+        """Pan to absolute angle."""
+        self._stop_current_movement()
+        clamped = self._clamp(angle, config.PAN_MIN, config.PAN_MAX)
+        if clamped != angle:
+            log_warning(f"Pan {angle}° clamped to {clamped}°")
+        self._apply_pan(clamped)
+        sleep(config.SERVO_MOVE_DELAY)
+        old, self.pan_angle = self.pan_angle, clamped
+        log_info(f"Pan: {old}° → {clamped}°")
+        return {"status": "ok", "pan": self.pan_angle}
 
-    def tilt_down(self, deg: int = 10) -> None:
-        """Tilt down by given degrees."""
-        new_angle = self.tilt_angle - deg
-        self.tilt_to(new_angle)
-        log_info(f"Camera: Tilt down {deg}°")
+    def tilt_to(self, angle: int) -> dict:
+        """Tilt to absolute angle."""
+        self._stop_current_movement()
+        clamped = self._clamp(angle, config.TILT_MIN, config.TILT_MAX)
+        if clamped != angle:
+            log_warning(f"Tilt {angle}° clamped to {clamped}°")
+        self._apply_tilt(clamped)
+        sleep(config.SERVO_MOVE_DELAY)
+        old, self.tilt_angle = self.tilt_angle, clamped
+        log_info(f"Tilt: {old}° → {clamped}°")
+        return {"status": "ok", "tilt": self.tilt_angle}
 
-    def center(self) -> None:
-        """Reset to 90° center."""
+    # ── Relative step moves ────────────────────────────────────────────────
+
+    def pan_left(self, deg: int = 10) -> dict:
+        return self.pan_to(self.pan_angle - deg * config.PAN_DIRECTION)
+
+    def pan_right(self, deg: int = 10) -> dict:
+        return self.pan_to(self.pan_angle + deg * config.PAN_DIRECTION)
+
+    def tilt_up(self, deg: int = 10) -> dict:
+        return self.tilt_to(self.tilt_angle + deg * config.TILT_DIRECTION)
+
+    def tilt_down(self, deg: int = 10) -> dict:
+        return self.tilt_to(self.tilt_angle - deg * config.TILT_DIRECTION)
+
+    # ── Continuous movement ────────────────────────────────────────────────
+
+    def tilt_up_start(self) -> dict:
+        self._start_movement(0, _STEP_DEG * config.TILT_DIRECTION)
+        return {"status": "ok", "action": "tilt_up_start"}
+
+    def tilt_down_start(self) -> dict:
+        self._start_movement(0, -_STEP_DEG * config.TILT_DIRECTION)
+        return {"status": "ok", "action": "tilt_down_start"}
+
+    def pan_left_start(self) -> dict:
+        self._start_movement(-_STEP_DEG * config.PAN_DIRECTION, 0)
+        return {"status": "ok", "action": "pan_left_start"}
+
+    def pan_right_start(self) -> dict:
+        self._start_movement(_STEP_DEG * config.PAN_DIRECTION, 0)
+        return {"status": "ok", "action": "pan_right_start"}
+
+    def up_left_start(self) -> dict:
+        self._start_movement(-_STEP_DEG * config.PAN_DIRECTION, _STEP_DEG * config.TILT_DIRECTION)
+        return {"status": "ok", "action": "up_left_start"}
+
+    def up_right_start(self) -> dict:
+        self._start_movement(_STEP_DEG * config.PAN_DIRECTION, _STEP_DEG * config.TILT_DIRECTION)
+        return {"status": "ok", "action": "up_right_start"}
+
+    def down_left_start(self) -> dict:
+        self._start_movement(-_STEP_DEG * config.PAN_DIRECTION, -_STEP_DEG * config.TILT_DIRECTION)
+        return {"status": "ok", "action": "down_left_start"}
+
+    def down_right_start(self) -> dict:
+        self._start_movement(_STEP_DEG * config.PAN_DIRECTION, -_STEP_DEG * config.TILT_DIRECTION)
+        return {"status": "ok", "action": "down_right_start"}
+
+    def servo_stop(self) -> dict:
+        self._stop_current_movement()
+        log_info(f"Servo stopped — pan={self.pan_angle}° tilt={self.tilt_angle}°")
+        return {"status": "ok", "action": "servo_stop",
+                "pan": self.pan_angle, "tilt": self.tilt_angle}
+
+    # ── Utility ───────────────────────────────────────────────────────────
+
+    def center(self) -> dict:
         self.pan_to(config.PAN_CENTER)
         self.tilt_to(config.TILT_CENTER)
-        log_info(
-            f"Camera: Center command completed "
-            f"({config.PAN_CENTER}°/{config.TILT_CENTER}°)"
-        )
+        log_info(f"Camera: centered ({config.PAN_CENTER}°/{config.TILT_CENTER}°)")
+        return {"status": "ok", "pan": config.PAN_CENTER, "tilt": config.TILT_CENTER}
 
     def get_angles(self) -> dict[str, int]:
-        """Returns current angles."""
         return {"pan": self.pan_angle, "tilt": self.tilt_angle}
 
-    def hold_position(self, angle: int, duration_sec: int, axis: str = "pan") -> None:
-        """Hold position by refreshing PWM periodically (for heavy loads)."""
-        # With hardware PWM, we can just keep the angle set
-        # No need to refresh - hardware handles it
-        servo = self.pan_servo if axis == "pan" else self.tilt_servo
-        # Map 0-180 to -90 to 90 for gpiozero
-        gpiozero_angle = angle - 90
-        servo.angle = gpiozero_angle
-        sleep(duration_sec)
+    def set_as_current_center(self) -> None:
+        self.pan_angle = config.PAN_CENTER
+        self.tilt_angle = config.TILT_CENTER
+        log_info("Camera: current position set as center")
 
     def pan_scan(self, start_angle: int, end_angle: int, step: int = 2) -> None:
-        """Scan from start to end angle smoothly (keep PWM active during movement)."""
-        clamped_start = self._clamp_angle(start_angle, config.PAN_MIN, config.PAN_MAX)
-        clamped_end = self._clamp_angle(end_angle, config.PAN_MIN, config.PAN_MAX)
-
-        if clamped_start < clamped_end:
-            angles = range(clamped_start, clamped_end + 1, step)
-        else:
-            angles = range(clamped_start, clamped_end - 1, -step)
-
+        start = self._clamp(start_angle, config.PAN_MIN, config.PAN_MAX)
+        end = self._clamp(end_angle, config.PAN_MIN, config.PAN_MAX)
+        angles = (
+            range(start, end + 1, step) if start < end else range(start, end - 1, -step)
+        )
         for angle in angles:
-            servo_angle = self._apply_offset(angle, config.PAN_OFFSET)
-            # Map 0-180 to -90 to 90 for gpiozero
-            gpiozero_angle = servo_angle - 90
-            self.pan_servo.angle = gpiozero_angle
+            self._apply_pan(angle)
             sleep(0.05)
             self.pan_angle = angle
-
-        # Hardware PWM is stable, no need to kill
-        log_info(f"Scan complete, holding at {clamped_end}°")
+        log_info(f"Pan scan complete at {end}°")
 
     def cleanup(self) -> None:
-        """Clean shutdown."""
+        self._stop_current_movement()
         try:
             self.center()
-            self.pan_servo.close()
-            self.tilt_servo.close()
-        except Exception as e:
-            log_warning(f"Pan-tilt cleanup error: {e}")
+            sleep(0.5)
+        except Exception:
+            pass
+        self._pan_pwm.close()
+        self._tilt_pwm.close()
+        log_info("PanTilt: hardware PWM released")

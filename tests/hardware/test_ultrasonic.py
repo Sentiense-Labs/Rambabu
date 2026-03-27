@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test HC-SR04 ultrasonic sensor."""
+"""Test HC-SR04 ultrasonic sensor — raw readings, no filtering."""
 
 import RPi.GPIO as GPIO
 import time
@@ -10,22 +10,18 @@ GPIO.setmode(GPIO.BCM)
 
 
 def cleanup():
-    """Safe cleanup."""
     time.sleep(0.1)
     try:
         GPIO.cleanup()
-    except:
+    except Exception:
         pass
 
 
 def get_distance():
-    """Measure distance in cm."""
-    # Send 10us pulse
     GPIO.output(ULTRASONIC_TRIG, True)
     time.sleep(0.00001)
     GPIO.output(ULTRASONIC_TRIG, False)
 
-    # Wait for echo
     timeout = time.time() + 0.1
 
     pulse_start = time.time()
@@ -41,8 +37,7 @@ def get_distance():
             return None
 
     pulse_duration = pulse_end - pulse_start
-    distance = pulse_duration * 17150
-    distance = round(distance, 2)
+    distance = round(pulse_duration * 17150, 2)
 
     if 2 <= distance <= 400:
         return distance
@@ -67,13 +62,11 @@ try:
 
     while True:
         distance = get_distance()
-
         if distance is not None:
             status = "CLEAR" if distance > 30 else "⚠️  CLOSE"
             print(f"Distance: {distance:6.2f} cm  [{status}]")
         else:
-            print("Distance: TIMEOUT (no obstacle detected)")
-
+            print("Distance: TIMEOUT")
         time.sleep(0.5)
 
 except KeyboardInterrupt:

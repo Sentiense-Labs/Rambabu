@@ -29,7 +29,10 @@ class Camera:
         if self.running:
             return {"status": "ok", "action": "start", "note": "already_running"}
 
-        self.camera = Picamera2()
+        try:
+            self.camera = Picamera2()
+        except Exception as e:
+            return {"status": "error", "error_code": "CAMERA_ERROR", "message": str(e)}
 
         cam_config = self.camera.create_preview_configuration(
             main={"size": self.resolution, "format": "RGB888"}
@@ -47,6 +50,8 @@ class Camera:
         while self.running:
             try:
                 frame = self.camera.capture_array()
+                # Camera is mounted upside-down — rotate 180° to correct
+                frame = frame[::-1, ::-1]
                 with self.lock:
                     self.latest_frame = frame
                 time.sleep(0.033)  # ~30fps

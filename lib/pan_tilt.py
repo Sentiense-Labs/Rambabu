@@ -1,17 +1,30 @@
 #!/usr/bin/env python3
 """
 PanTilt class for AI RC Car
-Controls pan and tilt servos using RPi.GPIO software PWM with move-and-kill method
+Controls pan and tilt servos using RPi.GPIO software PWM.
+
+Joystick control model:
+  - send  SERVO_<DIRECTION>_START  when joystick pushed  → continuous smooth movement
+  - send  SERVO_STOP               when joystick released → holds position, kills PWM
+  - send  SERVO_CENTER             anytime               → smoothly returns to center
+
+Supports 8 directions: UP, DOWN, LEFT, RIGHT, UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT
 """
 
 import RPi.GPIO as GPIO
+import threading
 from time import sleep
 import config
 from utils.logger import log_debug, log_info, log_warning, log_error
 
+# Degrees moved per tick during continuous movement
+_STEP_DEG: int = 1
+# Seconds between ticks — 50 ms = 20°/sec smooth sweep
+_TICK_SEC: float = 0.05
+
 
 class PanTilt:
-    """Controls pan and tilt servos using RPi.GPIO software PWM."""
+    """Controls pan and tilt servos with smooth joystick-friendly movement."""
 
     def __init__(self):
         """Initialize pan-tilt servos."""
@@ -31,133 +44,277 @@ class PanTilt:
         self.pan_angle = config.PAN_CENTER
         self.tilt_angle = config.TILT_CENTER
 
+        # Continuous movement state
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+
         log_info(
-            f"Camera: Pan-tilt initialized with software PWM "
-            f"({self.pan_angle}/{self.tilt_angle})"
+            f"PanTilt: initialized — pan={self.pan_angle} tilt={self.tilt_angle}"
         )
 
-    def _clamp_angle(self, angle: int, min_angle: int, max_angle: int) -> int:
-        """Clamp angle to valid range."""
-        return max(min_angle, min(angle, max_angle))
-
-    def _apply_offset(self, angle: int, offset: int) -> int:
-        """Apply calibration offset to a logical angle."""
-        return angle + offset
+    # ── Internals ─────────────────────────────────────────────────────────────
 
     def _angle_to_duty(self, angle: int) -> float:
         """Convert angle (0-180) to duty cycle (2.5-12.5%)."""
         return 2.5 + (angle / 180) * 10
 
-    def _move_and_kill(self, pwm_object, angle: int, servo_name: str) -> None:
-        """Send PWM signal briefly then kill to eliminate jitter."""
-        duty = self._angle_to_duty(angle)
-        pwm_object.ChangeDutyCycle(duty)
-        log_debug(f"{servo_name}: Moving to {angle}")
-        sleep(config.SERVO_MOVE_DELAY)
-        pwm_object.ChangeDutyCycle(0)
-        log_debug(f"{servo_name}: PWM killed, holding at {angle}")
+    def _clamp(self, value: int, lo: int, hi: int) -> int:
+        return max(lo, min(value, hi))
 
-    def set_as_current_center(self) -> dict:
-        """Mark current physical position as 90/90 reference."""
-        self.pan_angle = config.PAN_CENTER
-        self.tilt_angle = config.TILT_CENTER
-        log_info(
-            f"Camera: Current physical position set as center "
-            f"({self.pan_angle}/{self.tilt_angle})"
+    def _apply_pan_servo(self, logical_angle: int) -> None:
+        """Send current pan angle to PWM (keeps PWM live — no kill)."""
+        servo_angle = self._clamp(
+            logical_angle + config.PAN_OFFSET, 0, 180
         )
-        return {"status": "ok", "pan": self.pan_angle, "tilt": self.tilt_angle}
+        self.pan_pwm.ChangeDutyCycle(self._angle_to_duty(servo_angle))
 
-    def pan_to(self, angle: int) -> dict:
-        """Pan to absolute angle using move-and-kill method."""
-        old_angle = self.pan_angle
-        clamped_angle = self._clamp_angle(angle, config.PAN_MIN, config.PAN_MAX)
-        clamped = clamped_angle != angle
+    def _apply_tilt_servo(self, logical_angle: int) -> None:
+        """Send current tilt angle to PWM (keeps PWM live — no kill)."""
+        servo_angle = self._clamp(
+            logical_angle + config.TILT_OFFSET, 0, 180
+        )
+        self.tilt_pwm.ChangeDutyCycle(self._angle_to_duty(servo_angle))
 
-        if clamped:
-            log_warning(f"Pan angle {angle} clamped to {clamped_angle}")
+    def _kill_pwm(self) -> None:
+        """Kill PWM signal after servo has settled — eliminates jitter at rest."""
+        sleep(config.SERVO_MOVE_DELAY)
+        self.pan_pwm.ChangeDutyCycle(0)
+        self.tilt_pwm.ChangeDutyCycle(0)
 
-        if clamped_angle != old_angle:
-            servo_angle = self._apply_offset(clamped_angle, config.PAN_OFFSET)
-            self._move_and_kill(self.pan_pwm, servo_angle, "Pan")
-            self.pan_angle = clamped_angle
-            log_info(f"Pan: {old_angle} -> {clamped_angle}")
-        else:
-            log_debug(f"Pan already at {clamped_angle}, no movement")
+    def _stop_current_movement(self) -> None:
+        """Signal running thread to stop and wait for it to exit."""
+        if self._thread and self._thread.is_alive():
+            self._stop_event.set()
+            self._thread.join(timeout=1.0)
+        self._stop_event.clear()
+        self._thread = None
 
-        return {
-            "status": "ok",
-            "pan": self.pan_angle,
-            "clamped": clamped,
-        }
+    def _start_movement(self, pan_delta: int, tilt_delta: int) -> None:
+        """
+        Launch background thread that moves pan/tilt by (pan_delta, tilt_delta)
+        degrees per tick until stopped.
 
-    def tilt_to(self, angle: int) -> dict:
-        """Tilt to absolute angle using move-and-kill method."""
-        old_angle = self.tilt_angle
-        clamped_angle = self._clamp_angle(angle, config.TILT_MIN, config.TILT_MAX)
-        clamped = clamped_angle != angle
+        PWM stays ON during movement for smooth jitter-free sweep.
+        PWM is killed only after the thread exits (servo settled).
+        """
+        self._stop_current_movement()
 
-        if clamped:
-            log_warning(f"Tilt angle {angle} clamped to {clamped_angle}")
+        def _loop() -> None:
+            # Keep PWM alive for the entire duration — no move-and-kill between steps
+            while not self._stop_event.is_set():
+                moved = False
 
-        if clamped_angle != old_angle:
-            servo_angle = self._apply_offset(clamped_angle, config.TILT_OFFSET)
-            self._move_and_kill(self.tilt_pwm, servo_angle, "Tilt")
-            self.tilt_angle = clamped_angle
-            log_info(f"Tilt: {old_angle} -> {clamped_angle}")
-        else:
-            log_debug(f"Tilt already at {clamped_angle}, no movement")
+                if pan_delta != 0:
+                    new_pan = self._clamp(
+                        self.pan_angle + pan_delta,
+                        config.PAN_MIN, config.PAN_MAX
+                    )
+                    if new_pan != self.pan_angle:
+                        self.pan_angle = new_pan
+                        self._apply_pan_servo(self.pan_angle)
+                        moved = True
 
-        return {
-            "status": "ok",
-            "tilt": self.tilt_angle,
-            "clamped": clamped,
-        }
+                if tilt_delta != 0:
+                    new_tilt = self._clamp(
+                        self.tilt_angle + tilt_delta,
+                        config.TILT_MIN, config.TILT_MAX
+                    )
+                    if new_tilt != self.tilt_angle:
+                        self.tilt_angle = new_tilt
+                        self._apply_tilt_servo(self.tilt_angle)
+                        moved = True
 
-    def pan_left(self, deg: int = 10) -> dict:
-        """Pan left by given degrees."""
-        result = self.pan_to(self.pan_angle - deg * config.PAN_DIRECTION)
-        log_info(f"Camera: Pan left {deg}")
-        return result
+                if not moved:
+                    # Hit both limits — nothing more to do
+                    break
 
-    def pan_right(self, deg: int = 10) -> dict:
-        """Pan right by given degrees."""
-        result = self.pan_to(self.pan_angle + deg * config.PAN_DIRECTION)
-        log_info(f"Camera: Pan right {deg}")
-        return result
+                self._stop_event.wait(timeout=_TICK_SEC)
 
-    def tilt_up(self, deg: int = 10) -> dict:
-        """Tilt up by given degrees."""
-        result = self.tilt_to(self.tilt_angle + deg * config.TILT_DIRECTION)
-        log_info(f"Camera: Tilt up {deg}")
-        return result
+            # Settled — kill PWM to remove jitter at rest
+            self._kill_pwm()
+            log_debug(
+                f"PanTilt: movement stopped — pan={self.pan_angle} tilt={self.tilt_angle}"
+            )
 
-    def tilt_down(self, deg: int = 10) -> dict:
-        """Tilt down by given degrees."""
-        result = self.tilt_to(self.tilt_angle - deg * config.TILT_DIRECTION)
-        log_info(f"Camera: Tilt down {deg}")
-        return result
+        self._thread = threading.Thread(target=_loop, daemon=True)
+        self._thread.start()
+
+    # ── 8-direction start methods (joystick held) ────────────────────────────
+
+    def tilt_up_start(self) -> dict:
+        """Start continuous tilt upward. Call servo_stop() to halt."""
+        self._start_movement(0, _STEP_DEG * config.TILT_DIRECTION)
+        log_info("PanTilt: tilt UP start")
+        return {"status": "ok", "direction": "up"}
+
+    def tilt_down_start(self) -> dict:
+        """Start continuous tilt downward. Call servo_stop() to halt."""
+        self._start_movement(0, -_STEP_DEG * config.TILT_DIRECTION)
+        log_info("PanTilt: tilt DOWN start")
+        return {"status": "ok", "direction": "down"}
+
+    def pan_left_start(self) -> dict:
+        """Start continuous pan left. Call servo_stop() to halt."""
+        self._start_movement(-_STEP_DEG * config.PAN_DIRECTION, 0)
+        log_info("PanTilt: pan LEFT start")
+        return {"status": "ok", "direction": "left"}
+
+    def pan_right_start(self) -> dict:
+        """Start continuous pan right. Call servo_stop() to halt."""
+        self._start_movement(_STEP_DEG * config.PAN_DIRECTION, 0)
+        log_info("PanTilt: pan RIGHT start")
+        return {"status": "ok", "direction": "right"}
+
+    def up_left_start(self) -> dict:
+        """Start continuous diagonal up-left. Call servo_stop() to halt."""
+        self._start_movement(
+            -_STEP_DEG * config.PAN_DIRECTION,
+             _STEP_DEG * config.TILT_DIRECTION,
+        )
+        log_info("PanTilt: UP-LEFT start")
+        return {"status": "ok", "direction": "up_left"}
+
+    def up_right_start(self) -> dict:
+        """Start continuous diagonal up-right. Call servo_stop() to halt."""
+        self._start_movement(
+             _STEP_DEG * config.PAN_DIRECTION,
+             _STEP_DEG * config.TILT_DIRECTION,
+        )
+        log_info("PanTilt: UP-RIGHT start")
+        return {"status": "ok", "direction": "up_right"}
+
+    def down_left_start(self) -> dict:
+        """Start continuous diagonal down-left. Call servo_stop() to halt."""
+        self._start_movement(
+            -_STEP_DEG * config.PAN_DIRECTION,
+            -_STEP_DEG * config.TILT_DIRECTION,
+        )
+        log_info("PanTilt: DOWN-LEFT start")
+        return {"status": "ok", "direction": "down_left"}
+
+    def down_right_start(self) -> dict:
+        """Start continuous diagonal down-right. Call servo_stop() to halt."""
+        self._start_movement(
+             _STEP_DEG * config.PAN_DIRECTION,
+            -_STEP_DEG * config.TILT_DIRECTION,
+        )
+        log_info("PanTilt: DOWN-RIGHT start")
+        return {"status": "ok", "direction": "down_right"}
+
+    def servo_stop(self) -> dict:
+        """Stop any continuous movement and hold current position."""
+        self._stop_current_movement()
+        log_info(f"PanTilt: STOP — holding pan={self.pan_angle} tilt={self.tilt_angle}")
+        return {"status": "ok", "direction": "stopped",
+                "pan": self.pan_angle, "tilt": self.tilt_angle}
+
+    # ── Center return ─────────────────────────────────────────────────────────
 
     def center(self) -> dict:
-        """Reset to 90 center."""
-        self.pan_to(config.PAN_CENTER)
-        self.tilt_to(config.TILT_CENTER)
-        log_info(
-            f"Camera: Center command completed "
-            f"({config.PAN_CENTER}/{config.TILT_CENTER})"
-        )
-        return {"status": "ok", "pan": self.pan_angle, "tilt": self.tilt_angle}
+        """Smoothly return both axes to center position."""
+        self._stop_current_movement()
+
+        def _go_to_center() -> None:
+            while not self._stop_event.is_set():
+                pan_done = self.pan_angle == config.PAN_CENTER
+                tilt_done = self.tilt_angle == config.TILT_CENTER
+
+                if pan_done and tilt_done:
+                    break
+
+                if not pan_done:
+                    step = _STEP_DEG if self.pan_angle < config.PAN_CENTER else -_STEP_DEG
+                    self.pan_angle = self._clamp(
+                        self.pan_angle + step, config.PAN_MIN, config.PAN_MAX
+                    )
+                    self._apply_pan_servo(self.pan_angle)
+
+                if not tilt_done:
+                    step = _STEP_DEG if self.tilt_angle < config.TILT_CENTER else -_STEP_DEG
+                    self.tilt_angle = self._clamp(
+                        self.tilt_angle + step, config.TILT_MIN, config.TILT_MAX
+                    )
+                    self._apply_tilt_servo(self.tilt_angle)
+
+                self._stop_event.wait(timeout=_TICK_SEC)
+
+            self._kill_pwm()
+            log_info(f"PanTilt: centered — pan={self.pan_angle} tilt={self.tilt_angle}")
+
+        self._thread = threading.Thread(target=_go_to_center, daemon=True)
+        self._thread.start()
+        log_info("PanTilt: CENTER return started")
+        return {"status": "ok", "direction": "centering",
+                "target_pan": config.PAN_CENTER, "target_tilt": config.TILT_CENTER}
+
+    # ── Single-step methods (kept for backward compatibility) ─────────────────
+
+    def _move_and_kill(self, pwm_object, angle: int, servo_name: str) -> None:
+        """Send PWM signal briefly then kill to eliminate jitter (single step)."""
+        duty = self._angle_to_duty(angle)
+        pwm_object.ChangeDutyCycle(duty)
+        log_debug(f"{servo_name}: moving to {angle}")
+        sleep(config.SERVO_MOVE_DELAY)
+        pwm_object.ChangeDutyCycle(0)
+
+    def pan_to(self, angle: int) -> dict:
+        """Pan to absolute angle (single move)."""
+        self._stop_current_movement()
+        clamped = self._clamp(angle, config.PAN_MIN, config.PAN_MAX)
+        if clamped != angle:
+            log_warning(f"Pan angle {angle} clamped to {clamped}")
+        if clamped != self.pan_angle:
+            servo_angle = clamped + config.PAN_OFFSET
+            self._move_and_kill(self.pan_pwm, servo_angle, "Pan")
+            self.pan_angle = clamped
+        return {"status": "ok", "pan": self.pan_angle, "clamped": clamped != angle}
+
+    def tilt_to(self, angle: int) -> dict:
+        """Tilt to absolute angle (single move)."""
+        self._stop_current_movement()
+        clamped = self._clamp(angle, config.TILT_MIN, config.TILT_MAX)
+        if clamped != angle:
+            log_warning(f"Tilt angle {angle} clamped to {clamped}")
+        if clamped != self.tilt_angle:
+            servo_angle = clamped + config.TILT_OFFSET
+            self._move_and_kill(self.tilt_pwm, servo_angle, "Tilt")
+            self.tilt_angle = clamped
+        return {"status": "ok", "tilt": self.tilt_angle, "clamped": clamped != angle}
+
+    def pan_left(self, deg: int = 10) -> dict:
+        """Pan left by given degrees (single step)."""
+        return self.pan_to(self.pan_angle - deg * config.PAN_DIRECTION)
+
+    def pan_right(self, deg: int = 10) -> dict:
+        """Pan right by given degrees (single step)."""
+        return self.pan_to(self.pan_angle + deg * config.PAN_DIRECTION)
+
+    def tilt_up(self, deg: int = 10) -> dict:
+        """Tilt up by given degrees (single step)."""
+        return self.tilt_to(self.tilt_angle + deg * config.TILT_DIRECTION)
+
+    def tilt_down(self, deg: int = 10) -> dict:
+        """Tilt down by given degrees (single step)."""
+        return self.tilt_to(self.tilt_angle - deg * config.TILT_DIRECTION)
+
+    # ── Getters ───────────────────────────────────────────────────────────────
 
     def get_angles(self) -> dict[str, int]:
         """Returns current angles."""
         return {"pan": self.pan_angle, "tilt": self.tilt_angle}
 
+    def set_as_current_center(self) -> dict:
+        """Mark current physical position as reference center."""
+        self.pan_angle = config.PAN_CENTER
+        self.tilt_angle = config.TILT_CENTER
+        log_info(f"PanTilt: center reference set ({self.pan_angle}/{self.tilt_angle})")
+        return {"status": "ok", "pan": self.pan_angle, "tilt": self.tilt_angle}
+
     def hold_position(self, angle: int, duration_sec: int, axis: str = "pan") -> dict:
         """Hold position by refreshing PWM periodically (for heavy loads)."""
         from time import time as now
-
         pwm = self.pan_pwm if axis == "pan" else self.tilt_pwm
         duty = self._angle_to_duty(angle)
-
         end_time = now() + duration_sec
         while now() < end_time:
             pwm.ChangeDutyCycle(duty)
@@ -166,33 +323,30 @@ class PanTilt:
         return {"status": "ok", "axis": axis, "angle": angle}
 
     def pan_scan(self, start_angle: int, end_angle: int, step: int = 2) -> dict:
-        """Scan from start to end angle smoothly using move-and-kill."""
-        clamped_start = self._clamp_angle(start_angle, config.PAN_MIN, config.PAN_MAX)
-        clamped_end = self._clamp_angle(end_angle, config.PAN_MIN, config.PAN_MAX)
-
-        if clamped_start < clamped_end:
-            angles = range(clamped_start, clamped_end + 1, step)
-        else:
-            angles = range(clamped_start, clamped_end - 1, -step)
-
+        """Scan from start to end angle smoothly."""
+        clamped_start = self._clamp(start_angle, config.PAN_MIN, config.PAN_MAX)
+        clamped_end = self._clamp(end_angle, config.PAN_MIN, config.PAN_MAX)
+        angles = (
+            range(clamped_start, clamped_end + 1, step)
+            if clamped_start < clamped_end
+            else range(clamped_start, clamped_end - 1, -step)
+        )
         for angle in angles:
-            servo_angle = self._apply_offset(angle, config.PAN_OFFSET)
-            duty = self._angle_to_duty(servo_angle)
-            self.pan_pwm.ChangeDutyCycle(duty)
+            servo_angle = angle + config.PAN_OFFSET
+            self.pan_pwm.ChangeDutyCycle(self._angle_to_duty(servo_angle))
             sleep(0.05)
             self.pan_angle = angle
-
         self.pan_pwm.ChangeDutyCycle(0)
-        log_info(f"Scan complete, holding at {clamped_end}")
+        log_info(f"PanTilt: scan complete, holding at pan={clamped_end}")
         return {"status": "ok", "pan": self.pan_angle}
 
+    # ── Cleanup ───────────────────────────────────────────────────────────────
+
     def cleanup(self) -> None:
-        """Clean shutdown."""
+        """Clean shutdown — stop movement, center, kill PWM."""
         try:
-            self.center()
-            sleep(0.5)
+            self._stop_current_movement()
             self.pan_pwm.stop()
             self.tilt_pwm.stop()
-            GPIO.cleanup()
         except Exception as e:
-            log_error(f"Pan-tilt cleanup error: {e}")
+            log_error(f"PanTilt cleanup error: {e}")

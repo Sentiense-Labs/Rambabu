@@ -8,7 +8,15 @@ import RPi.GPIO as GPIO
 import time
 import threading
 import config
-from utils.logger import log_warning
+from utils.logger import log_warning, log_debug
+
+# Max allowed deviation from the stable EMA reference as a fraction of EMA.
+# e.g. 0.12 = reject if new reading differs by more than 12% from EMA.
+_OUTLIER_THRESHOLD: float = 0.12
+
+# EMA smoothing factor — lower = more stable, slower to follow real changes.
+# 0.2 tracks real movement well while resisting single-sample spikes.
+_EMA_ALPHA: float = 0.2
 
 
 class Ultrasonic:
@@ -29,6 +37,7 @@ class Ultrasonic:
 
         # Initial distance (safe default - far away)
         self.last_distance = 999.0
+        self._ema: float = 999.0  # Stable EMA reference for outlier detection
         self.lock = threading.Lock()
         self.running = False
         self.thread = None
@@ -71,15 +80,32 @@ class Ultrasonic:
 
         return self.last_distance
 
+    def _is_outlier(self, new: float, ema: float) -> bool:
+        """Return True if new reading deviates more than threshold from stable EMA."""
+        if ema >= 999.0:
+            return False  # No baseline yet — accept any reading
+        deviation = abs(new - ema) / ema
+        return deviation > _OUTLIER_THRESHOLD
+
     def _measurement_loop(self):
         """Background thread for continuous measurement at 20Hz"""
         while self.running:
             try:
                 distance = self._measure_distance()
 
-                # Thread-safe update of last distance
                 with self.lock:
-                    self.last_distance = distance
+                    if self._is_outlier(distance, self._ema):
+                        log_debug(
+                            f"Ultrasonic: outlier rejected "
+                            f"({distance:.1f} cm vs EMA {self._ema:.1f} cm)"
+                        )
+                    else:
+                        # Update EMA with accepted reading
+                        if self._ema >= 999.0:
+                            self._ema = distance  # Seed EMA on first reading
+                        else:
+                            self._ema = _EMA_ALPHA * distance + (1 - _EMA_ALPHA) * self._ema
+                        self.last_distance = distance
 
                 time.sleep(config.ULTRASONIC_POLL_INTERVAL)
             except Exception as e:

@@ -11,9 +11,10 @@ import RPi.GPIO as GPIO
 import threading
 from utils.logger import log_info, log_error
 from lib.motor import MotorController
-from lib.pan_tilt import PanTilt
+from lib.pan_tilt_gpiozero import PanTilt
 from lib.ultrasonic import Ultrasonic
 from lib.speaker import Speaker
+from lib.camera import Camera
 from server.app import create_app
 from server.mqtt.client import MqttClient
 from server.mqtt.command_handler import CommandHandler
@@ -25,6 +26,7 @@ motor = None
 pan_tilt = None
 ultrasonic = None
 speaker = None
+camera = None
 flask_app = None
 flask_thread = None
 obstacle_monitor_thread = None
@@ -81,7 +83,12 @@ def cleanup():
     """Clean up all hardware resources in reverse order"""
     log_info("=== Starting Shutdown Sequence ===")
 
-    global motor, pan_tilt, ultrasonic, speaker, flask_thread, mqtt_client, ble_server
+    global motor, pan_tilt, ultrasonic, speaker, camera, flask_thread, mqtt_client, ble_server
+
+    # Stop camera
+    if camera:
+        log_info("Stopping camera...")
+        camera.cleanup()
 
     # Stop BLE server
     if ble_server:
@@ -139,7 +146,7 @@ def run_flask_server():
 
 def main():
     """Main entry point"""
-    global motor, pan_tilt, ultrasonic, speaker, flask_app, flask_thread, obstacle_monitor_thread, mqtt_client, ble_server
+    global motor, pan_tilt, ultrasonic, speaker, camera, flask_app, flask_thread, obstacle_monitor_thread, mqtt_client, ble_server
 
     # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)
@@ -193,30 +200,40 @@ def main():
         pan_tilt.pan_to(config.PAN_CENTER)
         pan_tilt.tilt_to(config.TILT_CENTER)
 
-        # 4. Create Flask app (pass ultrasonic so routes can expose distance)
+        # 4. Initialize camera
+        log_info("Initializing camera...")
+        camera = Camera()
+        cam_result = camera.start()
+        if cam_result["status"] == "ok":
+            log_info(f"Camera started at {cam_result['resolution'][0]}x{cam_result['resolution'][1]}")
+        else:
+            log_error(f"Camera failed to start: {cam_result} — continuing without camera")
+            camera = None
+
+        # 5. Create Flask app
         log_info("Creating Flask application...")
         flask_app = create_app(
             motor=motor,
-            camera=None,
+            camera=camera,
             ultrasonic=ultrasonic,
             pan_tilt=pan_tilt,
             speaker=speaker,
             mode_manager=None,
         )
 
-        # 5. Start obstacle monitor daemon thread
+        # 6. Start obstacle monitor daemon thread
         obstacle_monitor_thread = threading.Thread(target=obstacle_monitor, daemon=True)
         obstacle_monitor_thread.start()
         log_info(
             f"Obstacle monitor started (stop threshold: {config.OBSTACLE_DETECTION_DISTANCE}cm)"
         )
 
-        # 6. Start Flask server in daemon thread
+        # 7. Start Flask server in daemon thread
         flask_thread = threading.Thread(target=run_flask_server, daemon=True)
         flask_thread.start()
         log_info(f"Web server started on {config.FLASK_HOST}:{config.FLASK_PORT}")
 
-        # 7. Connect MQTT to AWS IoT Core
+        # 8. Connect MQTT to AWS IoT Core
         log_info("Connecting to AWS IoT Core...")
         mqtt_client = MqttClient()
         command_handler = CommandHandler(
@@ -229,7 +246,7 @@ def main():
         else:
             log_error(f"MQTT connection failed: {mqtt_result}")
 
-        # 8. Start BLE GATT server
+        # 9. Start BLE GATT server
         log_info("Starting BLE server...")
         ble_server = BluetoothServer(motor=motor, pan_tilt=pan_tilt, speaker=speaker)
         ble_result = ble_server.start()
@@ -238,7 +255,7 @@ def main():
         else:
             log_error(f"BLE server failed: {ble_result}")
 
-        # 9. Keep main thread alive
+        # 10. Keep main thread alive
         log_info("System running - press Ctrl+C to stop")
         while True:
             time.sleep(1)

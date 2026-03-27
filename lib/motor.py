@@ -203,6 +203,5 @@ class MotorController:
             if self.pwm_backward:
                 self.pwm_backward.stop()
             self.stop()
-            GPIO.cleanup()
         except Exception as e:
             log_error(f"Motor cleanup error: {e}")

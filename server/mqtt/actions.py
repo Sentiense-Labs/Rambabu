@@ -25,16 +25,33 @@ class Action(StrEnum):
     # Pan servo (absolute angle)
     SERVO_PAN_TO = "SERVO_PAN_TO"
 
-    # Pan servo (relative)
+    # Pan servo (relative, single step)
     SERVO_PAN_LEFT = "SERVO_PAN_LEFT"
     SERVO_PAN_RIGHT = "SERVO_PAN_RIGHT"
 
     # Tilt servo (absolute angle)
     SERVO_TILT_TO = "SERVO_TILT_TO"
 
-    # Tilt servo (relative)
+    # Tilt servo (relative, single step)
     SERVO_TILT_UP = "SERVO_TILT_UP"
     SERVO_TILT_DOWN = "SERVO_TILT_DOWN"
 
-    # Pan-tilt center
+    # ── Joystick continuous movement (send START when held, STOP on release) ──
+
+    # 4 cardinal directions
+    SERVO_UP_START        = "SERVO_UP_START"
+    SERVO_DOWN_START      = "SERVO_DOWN_START"
+    SERVO_LEFT_START      = "SERVO_LEFT_START"
+    SERVO_RIGHT_START     = "SERVO_RIGHT_START"
+
+    # 4 diagonal directions
+    SERVO_UP_LEFT_START   = "SERVO_UP_LEFT_START"
+    SERVO_UP_RIGHT_START  = "SERVO_UP_RIGHT_START"
+    SERVO_DOWN_LEFT_START = "SERVO_DOWN_LEFT_START"
+    SERVO_DOWN_RIGHT_START = "SERVO_DOWN_RIGHT_START"
+
+    # Stop continuous movement and hold position
+    SERVO_STOP = "SERVO_STOP"
+
+    # Pan-tilt center (smooth return)
     SERVO_CENTER = "SERVO_CENTER"
