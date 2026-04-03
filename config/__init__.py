@@ -17,10 +17,10 @@ MOTOR_REAR_BACKWARD: Final[GPIOPin] = 26  # L9110S A-IB
 MOTOR_STEER_LEFT: Final[GPIOPin] = 27  # L9110S B-IA
 MOTOR_STEER_RIGHT: Final[GPIOPin] = 14  # L9110S B-IB
 
-# Camera Pan-Tilt System - SG90 Servos
-# Using hardware PWM pins (GPIO 12/13) for jitter-free operation on Pi 5
-PAN_SERVO: Final[GPIOPin] = 12  # Hardware PWM0 (Pin 32)
-TILT_SERVO: Final[GPIOPin] = 13  # Hardware PWM1 (Pin 33)
+# Camera Pan-Tilt System - SG90 Servos via PCA9685 I2C PWM Driver
+PCA9685_I2C_ADDRESS: Final[int] = 0x40  # Default I2C address
+SERVO_PAN_CHANNEL: Final[int] = 1       # PCA9685 channel 1
+SERVO_TILT_CHANNEL: Final[int] = 0      # PCA9685 channel 0
 
 # Ultrasonic Sensor - HC-SR04 Obstacle Detection
 ULTRASONIC_TRIG: Final[GPIOPin] = 17  # Trigger pin (sends 10us pulse)
@@ -39,8 +39,10 @@ MIN_SPEED: Final[int] = 30  # Minimum PWM duty cycle (0-100)
 MAX_SPEED: Final[int] = 100  # Maximum PWM duty cycle
 DEFAULT_SPEED: Final[int] = 70  # Default driving speed
 
-# Steering timing (prevent motor stall)
-STEER_PULSE_DURATION: Final[float] = 0.5  # Max seconds to hold steering
+# Steering timing (tuned via hardware test — 100% x 250ms)
+STEER_PULSE_DURATION: Final[float] = 0.25   # Seconds to hold steering pulse
+STEER_DEAD_TIME: Final[float] = 0.05        # Seconds to wait when cutting power
+STEER_SETTLE_TIME: Final[float] = 0.10      # Seconds to settle at center before reversing
 
 
 # ============================================================================
@@ -62,14 +64,14 @@ OBSTACLE_CLEAR_DISTANCE: Final[int] = 70  # cm — must be > OBSTACLE_DETECTION_
 # ============================================================================
 
 # Pan Servo (left/right)
-PAN_MIN: Final[int] = 30  # Leftmost safe angle
-PAN_CENTER: Final[int] = 85  # Forward-facing
-PAN_MAX: Final[int] = 140  # Rightmost safe angle
+PAN_MIN: Final[int] = 55  # Leftmost safe angle
+PAN_CENTER: Final[int] = 110  # Forward-facing
+PAN_MAX: Final[int] = 165  # Rightmost safe angle
 
 # Tilt Servo (up/down)
-TILT_MIN: Final[int] = 35  # Looking down
-TILT_CENTER: Final[int] = 70  # Level horizon
-TILT_MAX: Final[int] = 105  # Looking up
+TILT_MIN: Final[int] = 15  # Looking down (mechanical limit ~10°)
+TILT_CENTER: Final[int] = 80  # Level horizon
+TILT_MAX: Final[int] = 145  # Looking up (mechanical limit ~150°)
 
 PAN_OFFSET: Final[int] = 0
 TILT_OFFSET: Final[int] = 0
@@ -85,7 +87,7 @@ TILT_DIRECTION: Final[int] = -1  # Reversed — tilt servo mounted inverted
 # PWM FREQUENCIES (Hz)
 # ============================================================================
 
-MOTOR_PWM_FREQ: Final[int] = 100   # L9110S motor driver PWM frequency
+MOTOR_PWM_FREQ: Final[int] = 1000   # L9110S rear motor PWM frequency
 SERVO_PWM_FREQ: Final[int] = 50  # SG90 servo standard frequency
 
 # Move and Kill timing

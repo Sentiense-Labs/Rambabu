@@ -1,89 +1,49 @@
 #!/usr/bin/env python3
 """
 PanTilt class for AI RC Car.
-Controls pan/tilt servos via sysfs hardware PWM on Pi 5 (RP1 chip).
+Controls pan/tilt servos via RPi.GPIO software PWM with move-and-kill pattern.
 
-Mapping (confirmed on Pi 5):
-  GPIO 12 (Pan)  → pwmchip0 / pwm0
-  GPIO 13 (Tilt) → pwmchip0 / pwm1
+Move-and-kill: send PWM for SERVO_MOVE_DELAY, then set duty to 0.
+The servo holds position mechanically — no jitter at rest.
 
-config.txt must have:
-  dtoverlay=pwm-2chan,pin=12,func=0,pin2=13,func2=0
+Joystick control model:
+  - SERVO_<DIRECTION>_START  → continuous smooth movement (steps with move-and-kill)
+  - SERVO_STOP               → holds position, kills PWM
+  - SERVO_CENTER             → smoothly returns to center
+
+Supports 8 directions: UP, DOWN, LEFT, RIGHT, UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT
 """
 
-import os
+import RPi.GPIO as GPIO
 import threading
 from time import sleep
 import config
 from utils.logger import log_debug, log_info, log_warning
-
-# Sysfs PWM chip/channel mapping for Pi 5
-_PWM_CHIP = 0
-_PAN_CHANNEL = 0   # GPIO 12
-_TILT_CHANNEL = 1  # GPIO 13
-
-# Servo PWM timing (nanoseconds)
-_PERIOD_NS = 20_000_000   # 20ms = 50Hz
-_MIN_DUTY_NS = 500_000    # 0.5ms = 0°
-_MAX_DUTY_NS = 2_500_000  # 2.5ms = 180°
 
 # Continuous movement
 _STEP_DEG: int = 1
 _TICK_SEC: float = 0.05
 
 
-class _HardwarePWM:
-    """Sysfs hardware PWM channel wrapper."""
-
-    def __init__(self, chip: int, channel: int) -> None:
-        self._chip = chip
-        self._channel = channel
-        self._base = f"/sys/class/pwm/pwmchip{chip}/pwm{channel}"
-        self._export()
-
-    def _write(self, filename: str, value: int) -> None:
-        with open(f"{self._base}/{filename}", "w") as f:
-            f.write(str(value))
-
-    def _export(self) -> None:
-        export_path = f"/sys/class/pwm/pwmchip{self._chip}/export"
-        try:
-            with open(export_path, "w") as f:
-                f.write(str(self._channel))
-        except OSError:
-            pass  # Already exported
-        sleep(0.1)
-        self._write("period", _PERIOD_NS)
-        self._write("duty_cycle", 0)
-
-    def set_angle(self, angle: float) -> None:
-        """Set servo to angle (0–180°)."""
-        duty_ns = int(_MIN_DUTY_NS + (angle / 180.0) * (_MAX_DUTY_NS - _MIN_DUTY_NS))
-        duty_ns = max(_MIN_DUTY_NS, min(duty_ns, _MAX_DUTY_NS))
-        self._write("duty_cycle", duty_ns)
-
-    def enable(self) -> None:
-        self._write("enable", 1)
-
-    def disable(self) -> None:
-        self._write("enable", 0)
-
-    def close(self) -> None:
-        try:
-            self.disable()
-            unexport = f"/sys/class/pwm/pwmchip{self._chip}/unexport"
-            with open(unexport, "w") as f:
-                f.write(str(self._channel))
-        except OSError:
-            pass
+def _angle_to_duty(angle: int) -> float:
+    """Convert angle (0-180) to duty cycle (2.5-12.5%)."""
+    return 2.5 + (angle / 180) * 10
 
 
 class PanTilt:
-    """Controls pan/tilt servos via sysfs hardware PWM — jitter-free on Pi 5."""
+    """Controls pan/tilt servos via RPi.GPIO software PWM — move-and-kill for jitter-free hold."""
 
     def __init__(self) -> None:
-        self._pan_pwm = _HardwarePWM(_PWM_CHIP, _PAN_CHANNEL)
-        self._tilt_pwm = _HardwarePWM(_PWM_CHIP, _TILT_CHANNEL)
+        # GPIO.setmode() is handled by main.py before creating this object
+        GPIO.setwarnings(False)
+
+        GPIO.setup(config.PAN_SERVO, GPIO.OUT)
+        GPIO.setup(config.TILT_SERVO, GPIO.OUT)
+
+        self._pan_pwm = GPIO.PWM(config.PAN_SERVO, config.SERVO_PWM_FREQ)
+        self._tilt_pwm = GPIO.PWM(config.TILT_SERVO, config.SERVO_PWM_FREQ)
+        self._pan_pwm.start(0)
+        self._tilt_pwm.start(0)
 
         self.pan_angle = config.PAN_CENTER
         self.tilt_angle = config.TILT_CENTER
@@ -92,14 +52,11 @@ class PanTilt:
         self._thread: threading.Thread | None = None
 
         # Center on boot
-        self._pan_pwm.set_angle(config.PAN_CENTER)
-        self._tilt_pwm.set_angle(config.TILT_CENTER)
-        self._pan_pwm.enable()
-        self._tilt_pwm.enable()
-        sleep(config.SERVO_MOVE_DELAY)
+        self._move_and_kill_pan(config.PAN_CENTER)
+        self._move_and_kill_tilt(config.TILT_CENTER)
 
         log_info(
-            f"PanTilt: hardware PWM ready — "
+            f"PanTilt: RPi.GPIO PWM ready — "
             f"pan={self.pan_angle}° tilt={self.tilt_angle}°"
         )
 
@@ -108,13 +65,34 @@ class PanTilt:
     def _clamp(self, value: int, lo: int, hi: int) -> int:
         return max(lo, min(value, hi))
 
-    def _apply_pan(self, logical_angle: int) -> None:
+    def _move_and_kill_pan(self, logical_angle: int) -> None:
+        """Send pan PWM pulse then kill — servo holds mechanically."""
         servo_angle = self._clamp(logical_angle + config.PAN_OFFSET, 0, 180)
-        self._pan_pwm.set_angle(servo_angle)
+        self._pan_pwm.ChangeDutyCycle(_angle_to_duty(servo_angle))
+        sleep(config.SERVO_MOVE_DELAY)
+        self._pan_pwm.ChangeDutyCycle(0)
+
+    def _move_and_kill_tilt(self, logical_angle: int) -> None:
+        """Send tilt PWM pulse then kill — servo holds mechanically."""
+        servo_angle = self._clamp(logical_angle + config.TILT_OFFSET, 0, 180)
+        self._tilt_pwm.ChangeDutyCycle(_angle_to_duty(servo_angle))
+        sleep(config.SERVO_MOVE_DELAY)
+        self._tilt_pwm.ChangeDutyCycle(0)
+
+    def _apply_pan(self, logical_angle: int) -> None:
+        """Send pan PWM (no kill — caller manages duty cycle lifecycle)."""
+        servo_angle = self._clamp(logical_angle + config.PAN_OFFSET, 0, 180)
+        self._pan_pwm.ChangeDutyCycle(_angle_to_duty(servo_angle))
 
     def _apply_tilt(self, logical_angle: int) -> None:
+        """Send tilt PWM (no kill — caller manages duty cycle lifecycle)."""
         servo_angle = self._clamp(logical_angle + config.TILT_OFFSET, 0, 180)
-        self._tilt_pwm.set_angle(servo_angle)
+        self._tilt_pwm.ChangeDutyCycle(_angle_to_duty(servo_angle))
+
+    def _kill_pwm(self) -> None:
+        """Kill both PWM signals — servos hold position mechanically."""
+        self._pan_pwm.ChangeDutyCycle(0)
+        self._tilt_pwm.ChangeDutyCycle(0)
 
     def _stop_current_movement(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -128,6 +106,8 @@ class PanTilt:
 
         def _loop() -> None:
             while not self._stop_event.is_set():
+                moved = False
+
                 if pan_delta != 0:
                     new_pan = self._clamp(
                         self.pan_angle + pan_delta, config.PAN_MIN, config.PAN_MAX
@@ -135,6 +115,7 @@ class PanTilt:
                     if new_pan != self.pan_angle:
                         self._apply_pan(new_pan)
                         self.pan_angle = new_pan
+                        moved = True
 
                 if tilt_delta != 0:
                     new_tilt = self._clamp(
@@ -143,8 +124,18 @@ class PanTilt:
                     if new_tilt != self.tilt_angle:
                         self._apply_tilt(new_tilt)
                         self.tilt_angle = new_tilt
+                        moved = True
+
+                if not moved:
+                    break
 
                 self._stop_event.wait(_TICK_SEC)
+
+            # Settled — kill PWM to eliminate jitter at rest
+            self._kill_pwm()
+            log_debug(
+                f"PanTilt: movement stopped — pan={self.pan_angle} tilt={self.tilt_angle}"
+            )
 
         self._thread = threading.Thread(target=_loop, daemon=True)
         self._thread.start()
@@ -157,8 +148,7 @@ class PanTilt:
         clamped = self._clamp(angle, config.PAN_MIN, config.PAN_MAX)
         if clamped != angle:
             log_warning(f"Pan {angle}° clamped to {clamped}°")
-        self._apply_pan(clamped)
-        sleep(config.SERVO_MOVE_DELAY)
+        self._move_and_kill_pan(clamped)
         old, self.pan_angle = self.pan_angle, clamped
         log_info(f"Pan: {old}° → {clamped}°")
         return {"status": "ok", "pan": self.pan_angle}
@@ -169,8 +159,7 @@ class PanTilt:
         clamped = self._clamp(angle, config.TILT_MIN, config.TILT_MAX)
         if clamped != angle:
             log_warning(f"Tilt {angle}° clamped to {clamped}°")
-        self._apply_tilt(clamped)
-        sleep(config.SERVO_MOVE_DELAY)
+        self._move_and_kill_tilt(clamped)
         old, self.tilt_angle = self.tilt_angle, clamped
         log_info(f"Tilt: {old}° → {clamped}°")
         return {"status": "ok", "tilt": self.tilt_angle}
@@ -252,8 +241,7 @@ class PanTilt:
             range(start, end + 1, step) if start < end else range(start, end - 1, -step)
         )
         for angle in angles:
-            self._apply_pan(angle)
-            sleep(0.05)
+            self._move_and_kill_pan(angle)
             self.pan_angle = angle
         log_info(f"Pan scan complete at {end}°")
 
@@ -264,6 +252,6 @@ class PanTilt:
             sleep(0.5)
         except Exception:
             pass
-        self._pan_pwm.close()
-        self._tilt_pwm.close()
-        log_info("PanTilt: hardware PWM released")
+        self._pan_pwm.stop()
+        self._tilt_pwm.stop()
+        log_info("PanTilt: PWM stopped")

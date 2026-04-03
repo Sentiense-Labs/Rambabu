@@ -27,6 +27,9 @@ dependencies = [
     "flask-cors>=4.0.0",
     "bless>=0.2.2",
     "typing-extensions>=4.15.0",
+    "adafruit-circuitpython-pca9685>=3.4.21",
+    "adafruit-blinka>=9.0.4",
+    "smbus2>=0.6.0",
 ]
 requires-python = ">=3.10"
 

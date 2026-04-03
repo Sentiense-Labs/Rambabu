@@ -11,7 +11,7 @@ import RPi.GPIO as GPIO
 import threading
 from utils.logger import log_info, log_error
 from lib.motor import MotorController
-from lib.pan_tilt_gpiozero import PanTilt
+from lib.pan_tilt import PanTilt
 from lib.ultrasonic import Ultrasonic
 from lib.speaker import Speaker
 from lib.camera import Camera
@@ -61,10 +61,11 @@ def obstacle_monitor():
         try:
             if ultrasonic and motor and motor.is_moving_forward:
                 distance = ultrasonic.get_distance()
-                if distance <= config.OBSTACLE_DETECTION_DISTANCE:
+                log_info(f"Obstacle monitor: distance={distance:.1f}cm")
+                if ultrasonic.is_obstacle_confirmed():
                     log_info(
                         f"Obstacle monitor: STOP at {distance:.1f}cm "
-                        f"(<= {config.OBSTACLE_DETECTION_DISTANCE}cm)"
+                        f"(confirmed obstacle <= {config.OBSTACLE_DETECTION_DISTANCE}cm)"
                     )
                     motor.latch_obstacle()
                     motor.stop()
@@ -138,6 +139,7 @@ def run_flask_server():
             host=config.FLASK_HOST,
             port=config.FLASK_PORT,
             debug=False,
+            threaded=True,
             use_reloader=False,
         )
     except Exception as e:
@@ -179,7 +181,7 @@ def main():
 
         # 3a. Wire obstacle check into motor (with hysteresis for latch release)
         motor.set_obstacle_check(
-            check_fn=lambda: ultrasonic.get_distance() <= config.OBSTACLE_DETECTION_DISTANCE,
+            check_fn=lambda: ultrasonic.is_obstacle_confirmed(),
             clear_fn=lambda: ultrasonic.get_distance() > config.OBSTACLE_CLEAR_DISTANCE,
         )
         log_info(

@@ -55,3 +55,7 @@ class Action(StrEnum):
 
     # Pan-tilt center (smooth return)
     SERVO_CENTER = "SERVO_CENTER"
+
+    # Autonomous mode
+    AUTONOMOUS_START = "AUTONOMOUS_START"
+    AUTONOMOUS_STOP = "AUTONOMOUS_STOP"

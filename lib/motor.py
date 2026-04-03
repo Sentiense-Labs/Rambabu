@@ -49,10 +49,14 @@ class MotorController:
         # Initialize PWM for rear motor (speed control)
         self.pwm_forward = GPIO.PWM(self.rear_forward, config.MOTOR_PWM_FREQ)
         self.pwm_backward = GPIO.PWM(self.rear_backward, config.MOTOR_PWM_FREQ)
-
-        # Start PWM with 0% duty cycle (stopped)
         self.pwm_forward.start(0)
         self.pwm_backward.start(0)
+
+        # Initialize PWM for steering motor (tuned pulse control)
+        self.pwm_steer_left = GPIO.PWM(self.steer_left, config.MOTOR_PWM_FREQ)
+        self.pwm_steer_right = GPIO.PWM(self.steer_right, config.MOTOR_PWM_FREQ)
+        self.pwm_steer_left.start(0)
+        self.pwm_steer_right.start(0)
 
         # Ensure all outputs are low
         self.stop()
@@ -125,13 +129,23 @@ class MotorController:
         log_info(f"Motor: Backward at {duty_cycle}%")
         return {"status": "ok", "direction": "backward", "speed": duty_cycle}
 
+    def _steer_center_raw(self) -> None:
+        """Center steering with dead time to protect gears on direction change."""
+        self.pwm_steer_left.ChangeDutyCycle(0)
+        self.pwm_steer_right.ChangeDutyCycle(0)
+        GPIO.output(self.steer_left, GPIO.LOW)
+        GPIO.output(self.steer_right, GPIO.LOW)
+        time.sleep(config.STEER_DEAD_TIME)
+
     def left(self) -> dict:
         """Turn left for STEER_PULSE_DURATION seconds (auto-reset)."""
         self._direction = "left"
-        GPIO.output(self.steer_left, GPIO.LOW)
-        GPIO.output(self.steer_right, GPIO.HIGH)
+        self._steer_center_raw()
+        time.sleep(config.STEER_SETTLE_TIME)
+        self.pwm_steer_left.ChangeDutyCycle(0)
+        self.pwm_steer_right.ChangeDutyCycle(100)
         time.sleep(config.STEER_PULSE_DURATION)
-        GPIO.output(self.steer_right, GPIO.LOW)
+        self._steer_center_raw()
         self._direction = "stopped"
         log_info("Motor: Steering left")
         return {"status": "ok", "direction": "left"}
@@ -140,8 +154,10 @@ class MotorController:
         """Start turning left and HOLD position (use steer_center() to reset)."""
         self._direction = "left"
         try:
-            GPIO.output(self.steer_left, GPIO.LOW)
-            GPIO.output(self.steer_right, GPIO.HIGH)
+            self._steer_center_raw()
+            time.sleep(config.STEER_SETTLE_TIME)
+            self.pwm_steer_left.ChangeDutyCycle(0)
+            self.pwm_steer_right.ChangeDutyCycle(100)
             log_info("Motor: Steering left (hold)")
             return {"status": "ok", "direction": "left_hold"}
         except Exception as e:
@@ -151,10 +167,12 @@ class MotorController:
     def right(self) -> dict:
         """Turn right for STEER_PULSE_DURATION seconds (auto-reset)."""
         self._direction = "right"
-        GPIO.output(self.steer_left, GPIO.HIGH)
-        GPIO.output(self.steer_right, GPIO.LOW)
+        self._steer_center_raw()
+        time.sleep(config.STEER_SETTLE_TIME)
+        self.pwm_steer_right.ChangeDutyCycle(0)
+        self.pwm_steer_left.ChangeDutyCycle(100)
         time.sleep(config.STEER_PULSE_DURATION)
-        GPIO.output(self.steer_left, GPIO.LOW)
+        self._steer_center_raw()
         self._direction = "stopped"
         log_info("Motor: Steering right")
         return {"status": "ok", "direction": "right"}
@@ -163,8 +181,10 @@ class MotorController:
         """Start turning right and HOLD position (use steer_center() to reset)."""
         self._direction = "right"
         try:
-            GPIO.output(self.steer_left, GPIO.HIGH)
-            GPIO.output(self.steer_right, GPIO.LOW)
+            self._steer_center_raw()
+            time.sleep(config.STEER_SETTLE_TIME)
+            self.pwm_steer_right.ChangeDutyCycle(0)
+            self.pwm_steer_left.ChangeDutyCycle(100)
             log_info("Motor: Steering right (hold)")
             return {"status": "ok", "direction": "right_hold"}
         except Exception as e:
@@ -175,8 +195,7 @@ class MotorController:
         """Return steering to center position."""
         self._direction = "stopped"
         try:
-            GPIO.output(self.steer_left, GPIO.LOW)
-            GPIO.output(self.steer_right, GPIO.LOW)
+            self._steer_center_raw()
             log_info("Motor: Steering centered")
             return {"status": "ok", "direction": "center"}
         except Exception as e:
@@ -187,8 +206,8 @@ class MotorController:
         """Stop all motors immediately."""
         self.pwm_forward.ChangeDutyCycle(0)
         self.pwm_backward.ChangeDutyCycle(0)
-        GPIO.output(self.rear_forward, GPIO.LOW)
-        GPIO.output(self.rear_backward, GPIO.LOW)
+        self.pwm_steer_left.ChangeDutyCycle(0)
+        self.pwm_steer_right.ChangeDutyCycle(0)
         GPIO.output(self.steer_left, GPIO.LOW)
         GPIO.output(self.steer_right, GPIO.LOW)
         self._direction = "stopped"
@@ -198,10 +217,14 @@ class MotorController:
     def cleanup(self) -> None:
         """Clean up GPIO and PWM resources."""
         try:
+            self.stop()
             if self.pwm_forward:
                 self.pwm_forward.stop()
             if self.pwm_backward:
                 self.pwm_backward.stop()
-            self.stop()
+            if self.pwm_steer_left:
+                self.pwm_steer_left.stop()
+            if self.pwm_steer_right:
+                self.pwm_steer_right.stop()
         except Exception as e:
             log_error(f"Motor cleanup error: {e}")

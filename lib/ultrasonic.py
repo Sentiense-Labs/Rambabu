@@ -1,116 +1,145 @@
 #!/usr/bin/env python3
 """
 Ultrasonic class for AI RC Car
-Measures distance using HC-SR04 sensor
+Measures distance using HC-SR04 sensor.
+
+Filtering strategy — median of rolling window + streak on median:
+  - Median of 5 rejects up to 2 noise spikes (needs 3/5 agreement)
+  - Streak tracks consecutive median readings below threshold (not raw)
+  - Emergency fast-path at <10cm for imminent collision
+  - Single noise spike cannot false-stop the car
+  - Real obstacles confirmed within ~150ms
 """
 
 import RPi.GPIO as GPIO
 import time
 import threading
+from collections import deque
 import config
 from utils.logger import log_warning, log_debug
 
-# Max allowed deviation from the stable EMA reference as a fraction of EMA.
-# e.g. 0.12 = reject if new reading differs by more than 12% from EMA.
-_OUTLIER_THRESHOLD: float = 0.12
+# Rolling window size for median filter.
+# 5 readings at 20Hz = 250ms window. Median needs 3/5 to agree.
+_WINDOW_SIZE: int = 5
 
-# EMA smoothing factor — lower = more stable, slower to follow real changes.
-# 0.2 tracks real movement well while resisting single-sample spikes.
-_EMA_ALPHA: float = 0.2
+# Consecutive median readings below threshold to confirm obstacle.
+_CONFIRM_COUNT: int = 2
+
+# Emergency: below this distance, a single plausible reading triggers stop.
+_EMERGENCY_DISTANCE: float = 10.0
+
+# Max plausible distance drop per sample (cm). At 2 m/s, 50ms = 10cm.
+# 25cm allows margin for sensor jitter on real approaches.
+_MAX_DELTA_PER_SAMPLE: float = 25.0
 
 
 class Ultrasonic:
-    """Ultrasonic distance sensor with background measurement"""
+    """Ultrasonic distance sensor with median-filtered background measurement."""
 
     def __init__(self):
-        """Initialize ultrasonic sensor with background thread"""
-        # GPIO.setmode() is handled by main.py before creating this object
-        # Do NOT call it here to avoid "unknown handle" errors
+        """Initialize ultrasonic sensor with background thread."""
         GPIO.setwarnings(False)
 
-        # Get GPIO pins from config
         self.trig_pin = config.ULTRASONIC_TRIG
         self.echo_pin = config.ULTRASONIC_ECHO
 
         GPIO.setup(self.trig_pin, GPIO.OUT)
         GPIO.setup(self.echo_pin, GPIO.IN)
 
-        # Initial distance (safe default - far away)
         self.last_distance = 999.0
-        self._ema: float = 999.0  # Stable EMA reference for outlier detection
+        self._window: deque[float] = deque(maxlen=_WINDOW_SIZE)
+        self._close_streak: int = 0
+        self._emergency: bool = False
         self.lock = threading.Lock()
         self.running = False
         self.thread = None
 
-        # Start background measurement thread
         self.start()
 
     def _measure_distance(self) -> float:
-        """Single distance measurement with timeout handling"""
-        # Send 10us pulse
+        """Single distance measurement with timeout handling."""
         GPIO.output(self.trig_pin, True)
         time.sleep(0.00001)
         GPIO.output(self.trig_pin, False)
 
-        # Wait for echo with timeout
-        timeout = time.time() + 0.1  # 100ms timeout
+        timeout = time.time() + 0.1
 
-        # Wait for echo start
         pulse_start = time.time()
         while GPIO.input(self.echo_pin) == 0:
             pulse_start = time.time()
             if pulse_start > timeout:
-                return self.last_distance  # Return last known distance
+                return self.last_distance
 
-        # Wait for echo end
         pulse_end = time.time()
         while GPIO.input(self.echo_pin) == 1:
             pulse_end = time.time()
             if pulse_end > timeout:
                 return self.last_distance
 
-        # Calculate distance
         pulse_duration = pulse_end - pulse_start
-        distance = pulse_duration * 17150  # Speed of sound = 34300 cm/s
+        distance = pulse_duration * 17150
         distance = round(distance, 2)
 
-        # Sanity check (2cm - 400cm valid range)
         if 2 <= distance <= 400:
             return distance
 
         return self.last_distance
 
-    def _is_outlier(self, new: float, ema: float) -> bool:
-        """Return True if new reading deviates more than threshold from stable EMA."""
-        if ema >= 999.0:
-            return False  # No baseline yet — accept any reading
-        deviation = abs(new - ema) / ema
-        return deviation > _OUTLIER_THRESHOLD
+    def _median(self) -> float:
+        """Return median of the rolling window."""
+        if not self._window:
+            return 999.0
+        sorted_values = sorted(self._window)
+        mid = len(sorted_values) // 2
+        if len(sorted_values) % 2 == 0:
+            return (sorted_values[mid - 1] + sorted_values[mid]) / 2
+        return sorted_values[mid]
+
+    def _is_plausible_close(self, raw: float, current_median: float) -> bool:
+        """True if a close reading is physically plausible given recent median.
+
+        If we're already near an obstacle, any close reading is plausible.
+        From far away, a sudden drop bigger than _MAX_DELTA_PER_SAMPLE is noise.
+        """
+        if current_median <= config.OBSTACLE_DETECTION_DISTANCE * 1.5:
+            return True
+        delta = current_median - raw
+        return delta <= _MAX_DELTA_PER_SAMPLE
 
     def _measurement_loop(self):
-        """Background thread for continuous measurement at 20Hz"""
+        """Background thread: measure at 20Hz, update median-filtered distance."""
         while self.running:
             try:
-                distance = self._measure_distance()
+                raw = self._measure_distance()
 
                 with self.lock:
-                    if self._is_outlier(distance, self._ema):
-                        log_debug(
-                            f"Ultrasonic: outlier rejected "
-                            f"({distance:.1f} cm vs EMA {self._ema:.1f} cm)"
-                        )
+                    old_median = self._median()
+
+                    self._window.append(raw)
+                    median_distance = self._median()
+                    self.last_distance = median_distance
+
+                    # Streak on MEDIAN — noise can't build a streak
+                    if median_distance <= config.OBSTACLE_DETECTION_DISTANCE:
+                        self._close_streak += 1
                     else:
-                        # Update EMA with accepted reading
-                        if self._ema >= 999.0:
-                            self._ema = distance  # Seed EMA on first reading
-                        else:
-                            self._ema = _EMA_ALPHA * distance + (1 - _EMA_ALPHA) * self._ema
-                        self.last_distance = distance
+                        self._close_streak = 0
+
+                    # Emergency: imminent collision, single plausible reading
+                    self._emergency = (
+                        raw <= _EMERGENCY_DISTANCE
+                        and self._is_plausible_close(raw, old_median)
+                    )
+
+                    log_debug(
+                        f"Ultrasonic: raw={raw:.1f} median={median_distance:.1f} "
+                        f"streak={self._close_streak} emergency={self._emergency}"
+                    )
 
                 time.sleep(config.ULTRASONIC_POLL_INTERVAL)
             except Exception as e:
                 log_warning(f"Ultrasonic measurement error (SENSOR_TIMEOUT): {e}")
-                time.sleep(0.1)  # Back off on error
+                time.sleep(0.1)
 
     def start(self) -> dict:
         """Start background measurement thread."""
@@ -128,19 +157,29 @@ class Ultrasonic:
         return {"status": "ok", "action": "stop"}
 
     def wait_for_reading(self, timeout: float = 2.0) -> bool:
-        """Wait for a valid sensor reading (not the initial 999.0)"""
+        """Wait for a valid sensor reading (not the initial 999.0)."""
         start = time.time()
         while time.time() - start < timeout:
             with self.lock:
-                if self.last_distance < 999.0:  # We have a valid reading
+                if self.last_distance < 999.0:
                     return True
             time.sleep(0.05)
         return False
 
     def get_distance(self) -> float:
-        """Returns last measured distance in cm (thread-safe)."""
+        """Returns median-filtered distance in cm (thread-safe)."""
         with self.lock:
             return self.last_distance
+
+    def is_obstacle_confirmed(self) -> bool:
+        """True when filtered evidence confirms a real obstacle.
+
+        Two paths:
+        1. Normal: 2+ consecutive median readings <= OBSTACLE_DETECTION_DISTANCE
+        2. Emergency: single raw <= 10cm AND plausible given recent median
+        """
+        with self.lock:
+            return self._emergency or self._close_streak >= _CONFIRM_COUNT
 
     def is_clear(self, threshold: int = config.SAFE_DISTANCE) -> bool:
         """Returns True if path is clear (distance > threshold)."""
@@ -151,7 +190,7 @@ class Ultrasonic:
         return self.get_distance() < threshold
 
     def get_zone(self) -> str:
-        """Returns distance zone: 'safe', 'warning', 'danger'"""
+        """Returns distance zone: 'safe', 'warning', 'danger'."""
         distance = self.get_distance()
 
         if distance > config.SAFE_DISTANCE:
@@ -164,4 +203,3 @@ class Ultrasonic:
     def cleanup(self) -> None:
         """Clean shutdown."""
         self.stop()
-        GPIO.cleanup()

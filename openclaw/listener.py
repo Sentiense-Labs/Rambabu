@@ -10,6 +10,11 @@ Every incoming command is:
   2. Printed to console with status
   3. Executed on the car hardware (motor / steering)
 
+Autonomous mode:
+  - AUTONOMOUS_START → launches run_loop in a background thread
+  - AUTONOMOUS_STOP  → stops the loop cleanly
+  - Any manual command (MOTOR_*, STEER_*) auto-stops autonomous mode
+
 Run:
     cd /home/rambabu/rambabu_rc
     uv run python3 openclaw/listener.py
@@ -21,6 +26,7 @@ Stop:
 import json
 import signal
 import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -31,6 +37,10 @@ import config
 from server.mqtt.client import MqttClient
 from server.mqtt.actions import Action
 from lib.motor import MotorController
+from lib.pan_tilt_gpiozero import PanTilt
+from lib.ultrasonic import Ultrasonic
+from lib.camera import Camera
+from openclaw.autonomous import run_loop
 
 
 # ── Log file ─────────────────────────────────────────────────────────────────
@@ -61,14 +71,87 @@ BOLD   = "\033[1m"
 RESET  = "\033[0m"
 
 
+# ── Actions that count as manual override ─────────────────────────────────────
+
+_MANUAL_ACTIONS: frozenset[Action] = frozenset({
+    Action.MOTOR_FRONT,
+    Action.MOTOR_BACK,
+    Action.MOTOR_STOP,
+    Action.MOTOR_LEFT,
+    Action.MOTOR_RIGHT,
+    Action.MOTOR_STEER_LEFT_HOLD,
+    Action.MOTOR_STEER_RIGHT_HOLD,
+    Action.MOTOR_STEER_CENTER,
+    Action.MOTOR_BACK_STEER_LEFT,
+    Action.MOTOR_BACK_STEER_RIGHT,
+})
+
+
 # ── Command handler ───────────────────────────────────────────────────────────
 
 class OpenClawHandler:
     """Receives OpenClaw MQTT messages, logs them, and drives the car."""
 
-    def __init__(self, motor: MotorController):
+    def __init__(
+        self,
+        motor: MotorController,
+        pan_tilt: PanTilt,
+        ultrasonic: Ultrasonic,
+        camera: Camera,
+    ):
         self._motor = motor
+        self._pan_tilt = pan_tilt
+        self._ultrasonic = ultrasonic
+        self._camera = camera
         self._count = 0
+
+        # Autonomous mode state
+        self._auto_stop_event: threading.Event = threading.Event()
+        self._auto_thread: threading.Thread | None = None
+
+    @property
+    def is_autonomous_running(self) -> bool:
+        return self._auto_thread is not None and self._auto_thread.is_alive()
+
+    def _stop_autonomous(self, reason: str) -> None:
+        """Signal the autonomous loop to stop and wait for it to exit."""
+        if not self.is_autonomous_running:
+            return
+        print(f"{YELLOW}  Stopping autonomous mode ({reason}){RESET}")
+        self._auto_stop_event.set()
+        self._auto_thread.join(timeout=5.0)
+        self._auto_thread = None
+        self._auto_stop_event.clear()
+        print(f"{GREEN}  Autonomous mode stopped{RESET}")
+
+    def _start_autonomous(self) -> dict:
+        """Start autonomous loop in a background thread."""
+        if self.is_autonomous_running:
+            msg = "Autonomous mode already running — ignoring"
+            print(f"{YELLOW}  ⚠ {msg}{RESET}")
+            return {"status": "ignored", "reason": msg}
+
+        # Ensure camera is running
+        if self._camera.get_frame() is None:
+            self._camera.start()
+            time.sleep(1.0)
+
+        self._auto_stop_event.clear()
+        self._auto_thread = threading.Thread(
+            target=run_loop,
+            kwargs={
+                "motor": self._motor,
+                "pan_tilt": self._pan_tilt,
+                "ultrasonic": self._ultrasonic,
+                "camera": self._camera,
+                "stop_event": self._auto_stop_event,
+            },
+            daemon=True,
+            name="autonomous-loop",
+        )
+        self._auto_thread.start()
+        print(f"{GREEN}  Autonomous mode started{RESET}")
+        return {"status": "ok", "action": "autonomous_start"}
 
     def handle(self, topic: str, payload: dict) -> None:
         self._count += 1
@@ -116,6 +199,10 @@ class OpenClawHandler:
             _write_log(log_entry)
             return
 
+        # Manual command overrides autonomous mode
+        if action in _MANUAL_ACTIONS and self.is_autonomous_running:
+            self._stop_autonomous("manual override")
+
         # Execute
         result = self._execute(action, speed)
         print(f"{GREEN}  ✓ Executed: {action}  →  {result}{RESET}")
@@ -149,6 +236,11 @@ class OpenClawHandler:
             case Action.MOTOR_BACK_STEER_RIGHT:
                 m.steer_right_hold()
                 return m.back(speed) if speed else m.back()
+            case Action.AUTONOMOUS_START:
+                return self._start_autonomous()
+            case Action.AUTONOMOUS_STOP:
+                self._stop_autonomous("AUTONOMOUS_STOP command")
+                return {"status": "ok", "action": "autonomous_stop"}
             case _:
                 return {"status": "skipped", "reason": f"no hardware handler for {action}"}
 
@@ -166,8 +258,16 @@ def main():
 
     GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
+
     motor = MotorController()
-    handler = OpenClawHandler(motor)
+    pan_tilt = PanTilt()
+    ultrasonic = Ultrasonic()
+    camera = Camera()
+
+    # Wait for ultrasonic
+    ultrasonic.wait_for_reading(timeout=3.0)
+
+    handler = OpenClawHandler(motor, pan_tilt, ultrasonic, camera)
 
     mqtt = MqttClient()
     mqtt.set_command_callback(handler.handle)
@@ -200,8 +300,13 @@ def main():
 
     def shutdown(sig, frame):
         print(f"\n{CYAN}→ Shutting down ...{RESET}")
+        handler._stop_autonomous("shutdown")
         motor.stop()
+        pan_tilt.center()
         mqtt.cleanup()
+        camera.cleanup()
+        pan_tilt.cleanup()
+        ultrasonic.cleanup()
         motor.cleanup()
         GPIO.cleanup()
         print(f"{GREEN}✓ Done. Log saved to: {_log_file()}{RESET}")
