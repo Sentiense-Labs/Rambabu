@@ -126,8 +126,11 @@ def cleanup():
         log_info("Stopping pan-tilt servos...")
         pan_tilt.cleanup()
 
-    # Cleanup GPIO
-    GPIO.cleanup()
+    # Cleanup GPIO — wrapped because lgpio PWM.__del__ can race with cleanup
+    try:
+        GPIO.cleanup()
+    except Exception:
+        pass
     log_info("Shutdown complete")
 
 
@@ -189,27 +192,39 @@ def main():
             f"clear: {config.OBSTACLE_CLEAR_DISTANCE}cm)"
         )
 
-        # 3b. Initialize speaker
-        log_info("Initializing speaker...")
-        speaker = Speaker()
-        log_info(f"Speaker initialized (output: {config.SPEAKER_OUTPUT})")
+        # 3b. Initialize speaker (optional)
+        try:
+            log_info("Initializing speaker...")
+            speaker = Speaker()
+            log_info(f"Speaker initialized (output: {config.SPEAKER_OUTPUT})")
+        except Exception as e:
+            log_error(f"Speaker init failed: {e} — continuing without speaker")
+            speaker = None
 
-        log_info("Initializing pan-tilt servos...")
-        pan_tilt = PanTilt()
-        pan_tilt.set_as_current_center()
-        log_info("Pan-tilt initialized at center (90°/90°)")
+        # 3c. Initialize pan-tilt servos (optional — requires I2C PCA9685)
+        try:
+            log_info("Initializing pan-tilt servos...")
+            pan_tilt = PanTilt()
+            pan_tilt.set_as_current_center()
+            pan_tilt.pan_to(config.PAN_CENTER)
+            pan_tilt.tilt_to(config.TILT_CENTER)
+            log_info("Pan-tilt initialized at center")
+        except Exception as e:
+            log_error(f"Pan-tilt init failed: {e} — continuing without pan-tilt")
+            pan_tilt = None
 
-        pan_tilt.pan_to(config.PAN_CENTER)
-        pan_tilt.tilt_to(config.TILT_CENTER)
-
-        # 4. Initialize camera
-        log_info("Initializing camera...")
-        camera = Camera()
-        cam_result = camera.start()
-        if cam_result["status"] == "ok":
-            log_info(f"Camera started at {cam_result['resolution'][0]}x{cam_result['resolution'][1]}")
-        else:
-            log_error(f"Camera failed to start: {cam_result} — continuing without camera")
+        # 4. Initialize camera (optional)
+        try:
+            log_info("Initializing camera...")
+            camera = Camera()
+            cam_result = camera.start()
+            if cam_result["status"] == "ok":
+                log_info(f"Camera started at {cam_result['resolution'][0]}x{cam_result['resolution'][1]}")
+            else:
+                log_error(f"Camera failed to start: {cam_result} — continuing without camera")
+                camera = None
+        except Exception as e:
+            log_error(f"Camera init failed: {e} — continuing without camera")
             camera = None
 
         # 5. Create Flask app
@@ -235,27 +250,35 @@ def main():
         flask_thread.start()
         log_info(f"Web server started on {config.FLASK_HOST}:{config.FLASK_PORT}")
 
-        # 8. Connect MQTT to AWS IoT Core
-        log_info("Connecting to AWS IoT Core...")
-        mqtt_client = MqttClient()
-        command_handler = CommandHandler(
-            motor=motor, pan_tilt=pan_tilt, speaker=speaker
-        )
-        mqtt_client.set_command_callback(command_handler.handle)
-        mqtt_result = mqtt_client.connect()
-        if mqtt_result["status"] == "ok":
-            log_info(f"MQTT connected — subscribing to {config.MQTT_COMMANDS_TOPIC}")
-        else:
-            log_error(f"MQTT connection failed: {mqtt_result}")
+        # 8. Connect MQTT to AWS IoT Core (optional)
+        try:
+            log_info("Connecting to AWS IoT Core...")
+            mqtt_client = MqttClient()
+            command_handler = CommandHandler(
+                motor=motor, pan_tilt=pan_tilt, speaker=speaker
+            )
+            mqtt_client.set_command_callback(command_handler.handle)
+            mqtt_result = mqtt_client.connect()
+            if mqtt_result["status"] == "ok":
+                log_info(f"MQTT connected — subscribing to {config.MQTT_COMMANDS_TOPIC}")
+            else:
+                log_error(f"MQTT connection failed: {mqtt_result}")
+        except Exception as e:
+            log_error(f"MQTT init failed: {e} — continuing without MQTT")
+            mqtt_client = None
 
-        # 9. Start BLE GATT server
-        log_info("Starting BLE server...")
-        ble_server = BluetoothServer(motor=motor, pan_tilt=pan_tilt, speaker=speaker)
-        ble_result = ble_server.start()
-        if ble_result["status"] == "ok":
-            log_info("BLE server started — phone can now connect to 'RC-Car'")
-        else:
-            log_error(f"BLE server failed: {ble_result}")
+        # 9. Start BLE GATT server (optional)
+        try:
+            log_info("Starting BLE server...")
+            ble_server = BluetoothServer(motor=motor, pan_tilt=pan_tilt, speaker=speaker)
+            ble_result = ble_server.start()
+            if ble_result["status"] == "ok":
+                log_info("BLE server started — phone can now connect to 'RC-Car'")
+            else:
+                log_error(f"BLE server failed: {ble_result}")
+        except Exception as e:
+            log_error(f"BLE init failed: {e} — continuing without BLE")
+            ble_server = None
 
         # 10. Keep main thread alive
         log_info("System running - press Ctrl+C to stop")

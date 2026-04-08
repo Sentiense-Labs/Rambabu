@@ -171,8 +171,6 @@ def sweep_tilt(bus: SMBus, step: int = 5) -> None:
            config.TILT_MIN, config.TILT_CENTER, config.TILT_MAX,
            step=step, delay=0.10)
 
-    print(f"  [TILT] done — parked at {angle_center}° (PWM off)")
-
 
 # ---------------------------------------------------------------------------
 # Pytest tests
@@ -304,8 +302,18 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     with SMBus(I2C_BUS) as bus:
-        mode1 = bus.read_byte_data(config.PCA9685_I2C_ADDRESS, _MODE1)
-        print(f"[OK] PCA9685 at {hex(config.PCA9685_I2C_ADDRESS)}, MODE1={hex(mode1)}")
+        # Retry I2C init — breadboard connections can be flaky
+        for attempt in range(10):
+            try:
+                mode1 = bus.read_byte_data(config.PCA9685_I2C_ADDRESS, _MODE1)
+                print(f"[OK] PCA9685 at {hex(config.PCA9685_I2C_ADDRESS)}, MODE1={hex(mode1)}")
+                break
+            except OSError:
+                if attempt == 9:
+                    print("[FAIL] PCA9685 not responding after 10 retries. Check wiring.")
+                    sys.exit(1)
+                print(f"  I2C retry {attempt + 1}/10 ...")
+                time.sleep(0.5)
 
         _init_pca9685(bus)
         prescale = bus.read_byte_data(config.PCA9685_I2C_ADDRESS, _PRESCALE)

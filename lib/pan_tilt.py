@@ -30,8 +30,9 @@ _I2C_BUS = 1
 
 # Continuous movement
 _PAN_STEP_DEG: int = 1
+_PAN_TICK_SEC: float = 0.05
 _TILT_STEP_DEG: int = 5
-_TICK_SEC: float = 0.05
+_TILT_TICK_SEC: float = 0.10
 
 # SG90 pulse range at 50Hz (20ms period), in 12-bit ticks (0-4095)
 _MIN_TICKS = 102   # 0.5ms → 0°
@@ -75,13 +76,21 @@ class PanTilt:
     # ── PCA9685 low-level ──────────────────────────────────────────────────
 
     def _init_pca9685(self) -> None:
-        """Reset PCA9685 and set PWM frequency."""
-        self._bus.write_byte_data(self._addr, _MODE1, 0x10)  # sleep
-        time.sleep(0.005)
-        prescale = _prescale_value(config.SERVO_PWM_FREQ)
-        self._bus.write_byte_data(self._addr, _PRESCALE, prescale)
-        self._bus.write_byte_data(self._addr, _MODE1, 0x20)  # wake + auto-increment
-        time.sleep(0.005)
+        """Reset PCA9685 and set PWM frequency, with I2C retry."""
+        for attempt in range(10):
+            try:
+                self._bus.write_byte_data(self._addr, _MODE1, 0x10)  # sleep
+                time.sleep(0.005)
+                prescale = _prescale_value(config.SERVO_PWM_FREQ)
+                self._bus.write_byte_data(self._addr, _PRESCALE, prescale)
+                self._bus.write_byte_data(self._addr, _MODE1, 0x20)  # wake + auto-increment
+                time.sleep(0.005)
+                return
+            except OSError:
+                if attempt == 9:
+                    raise
+                log_warning(f"PCA9685 init retry {attempt + 1}/10")
+                time.sleep(0.5)
 
     def _write_servo(self, channel: int, angle: int) -> None:
         """Set a PCA9685 channel to the given angle, with I2C retry."""
@@ -181,7 +190,9 @@ class PanTilt:
                 if not moved:
                     break
 
-                self._stop_event.wait(_TICK_SEC)
+                # Use slower tick for tilt (gravity load), faster for pan
+                tick = _TILT_TICK_SEC if tilt_delta != 0 else _PAN_TICK_SEC
+                self._stop_event.wait(tick)
 
             # Settled — kill PWM to eliminate jitter at rest
             self._kill_both()

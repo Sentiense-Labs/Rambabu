@@ -30,6 +30,7 @@ dependencies = [
     "adafruit-circuitpython-pca9685>=3.4.21",
     "adafruit-blinka>=9.0.4",
     "smbus2>=0.6.0",
+    "mcp>=1.27.0",
 ]
 requires-python = ">=3.10"
 
@@ -37,7 +38,7 @@ requires-python = ">=3.10"
 # tflite-runtime has no wheels for Python 3.13 — we use ONNX inference instead
 override-dependencies = [
     "tflite-runtime ; python_version < '0'",
-    "bleak>=0.19.0,<0.21.0",
+    "bleak>=1.1.1",
 ]
 
 [dependency-groups]
