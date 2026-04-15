@@ -7,8 +7,8 @@ Hard-caps reverse directions at REVERSE_HARD_CAP_S (0.5s).
 
 from __future__ import annotations
 
-from agno.middleware.logging import with_logging
-from agno.middleware.timeout import with_timeout
+from agno_ai.middleware.logging import with_logging
+from agno_ai.middleware.timeout import with_timeout
 from agno_ai.types.context import HardwareContext
 from agno_ai import constants as C
 import time

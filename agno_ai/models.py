@@ -7,7 +7,7 @@ Mirrors the Mastra ModelPresets pattern:
   - Support for timeout configuration and prompt caching
 
 Usage:
-  from agno.models import get_model
+  from agno_ai.models import get_model
 
   # Agent model (default)
   agent_model = get_model("FAST")
@@ -40,7 +40,7 @@ except ImportError:
     Claude = None  # type: ignore
 
 try:
-    from agno.models.openai import OpenAIChat
+    from agno_ai.models.openai import OpenAIChat
 except ImportError:
     OpenAIChat = None  # type: ignore
 

@@ -1,7 +1,7 @@
 """
 BrainEvent — asynchronous events injected into the agent loop by SonarGuard.
 
-TOOL_ADDENDUM and COMPRESS_PROMPT are imported from agno.lib.prompts
+TOOL_ADDENDUM and COMPRESS_PROMPT are imported from agno_ai.lib.prompts
 so there is a single source of truth for prompt text.
 """
 
