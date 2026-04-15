@@ -11,7 +11,7 @@ Two agents:
 ## Architecture
 
 ```
-agno/                          # Local Agno brain package (shadowed pip agno 2.5.17 — intentional)
+agno_ai/                          # Local Agno brain package (shadowed pip agno 2.5.17 — intentional)
 ├── constants.py               # All hardware constants (GPIO pins, timeouts, zones, speeds)
 ├── models.py                  # get_model() factory — FAST/BALANCED/COMPRESSION presets
 ├── service.py                 # FastAPI wrapper (create_agno_service)
@@ -60,16 +60,16 @@ agno/                          # Local Agno brain package (shadowed pip agno 2.5
 ## Key Design Decisions
 
 ### Namespace shadowing is intentional
-`agno/` shadows the installed `agno` 2.5.17 pip package. This is fine because:
-- On the Pi, the local `agno/` is the only code that matters
-- All internal imports within `agno/` use relative paths (`from agno.models import get_model`)
-- Installed agno submodules (`agno.agent`, `agno.db.sqlite`, `agno.models.google`, etc.) are only imported by `agno/models.py` and `agno/lib/memory.py`
+`agno_ai/` shadows the installed `agno` 2.5.17 pip package. This is fine because:
+- On the Pi, the local `agno_ai/` is the only code that matters
+- All internal imports within `agno_ai/` use relative paths (`from agno.models import get_model`)
+- Installed agno submodules (`agno.agent`, `agno.db.sqlite`, `agno.models.google`, etc.) are only imported by `agno_ai/models.py` and `agno_ai/lib/memory.py`
 
 ### SOUL.md is NOT read at runtime
-System prompt is built programmatically via `PromptBuilder` in `agno/lib/prompts.py`. The `build_soul_instructions()` function constructs the SOUL text from hardcoded strings. `brain/SOUL.md` is kept for documentation only.
+System prompt is built programmatically via `PromptBuilder` in `agno_ai/lib/prompts.py`. The `build_soul_instructions()` function constructs the SOUL text from hardcoded strings. `brain/SOUL.md` is kept for documentation only.
 
 ### Prompt caching
-`agno/models.py` supports `cache_system_prompt=True` + `extended_cache_time=True` for Anthropic models, matching Mastra's pattern. Google models use `cached_content` for context caching.
+`agno_ai/models.py` supports `cache_system_prompt=True` + `extended_cache_time=True` for Anthropic models, matching Mastra's pattern. Google models use `cached_content` for context caching.
 
 ### Tool signatures
 All 10 tools keep the **same names and parameter shapes** as the original brain. Tool implementations were rewritten but the interfaces are identical — `main.py` wiring and `command_handler.py` don't need changes.
@@ -128,7 +128,7 @@ Note: `CommandHandler` signature hasn't changed — it still takes `rambabu_agen
 
 ## REST API
 
-When `main.py` starts the Flask server (`server/app.py`), the agent is available via MQTT commands. The FastAPI service (`agno/service.py`) is optional and not started by default in `main.py`.
+When `main.py` starts the Flask server (`server/app.py`), the agent is available via MQTT commands. The FastAPI service (`agno_ai/service.py`) is optional and not started by default in `main.py`.
 
 To run the FastAPI service standalone:
 ```bash
@@ -148,7 +148,7 @@ Routes:
 - `POST /explore/stop` — stop explorer
 - `GET /health` — liveness
 
-## Model Presets (agno/models.py)
+## Model Presets (agno_ai/models.py)
 
 | Preset | Model | Use |
 |--------|-------|-----|
@@ -181,7 +181,7 @@ The agent responds to MQTT commands via `CommandHandler`. Compatible with the ex
 
 ## ObservationalMemory Tuning
 
-Thresholds in `agno/lib/memory.py`:
+Thresholds in `agno_ai/lib/memory.py`:
 ```python
 TOKEN_OBSERVATION_THRESHOLD = 1500   # Chars in buffer before _observe()
 OBSERVATION_COUNT_REFLECT = 3       # Observations before _reflect()
@@ -214,7 +214,7 @@ uv run ruff check .
 ## Troubleshooting
 
 ### "Function not found" for tools in AgentOS UI
-Caused by middleware not propagating `__name__`. Fixed in `agno/middleware/logging.py` and `agno/middleware/timeout.py` — both add `wrapper.__name__ = fn.__name__` before returning.
+Caused by middleware not propagating `__name__`. Fixed in `agno_ai/middleware/logging.py` and `agno_ai/middleware/timeout.py` — both add `wrapper.__name__ = fn.__name__` before returning.
 
 ### High token counts on every request
 `num_history_runs=1` keeps last run in context. With verbose tool results, this inflates tokens. Current setting is 1. To disable history: set `add_history_to_context=False`.
@@ -229,7 +229,7 @@ def wrapper(*_args, args=None, kwargs=None, **kw):
     final_args = args if args is not None else (_args if _args else ())
     final_kwargs = kwargs if kwargs is not None else kw
 ```
-Both `logging.py` and `timeout.py` in `agno/middleware/` use this pattern.
+Both `logging.py` and `timeout.py` in `agno_ai/middleware/` use this pattern.
 
 ## Files Reference
 
@@ -243,6 +243,6 @@ Both `logging.py` and `timeout.py` in `agno/middleware/` use this pattern.
 | `brain/sonar_guard.py` | 20Hz obstacle monitor — unchanged |
 | `brain/movement_manager.py` | Speed/brake control — unchanged |
 | `brain/maneuvers.py` | three_point_turn, align_to_path, reverse_steer — unchanged |
-| `agno/lib/prompts.py` | Programmatic SOUL builder — replaces SOUL.md read |
-| `agno/lib/memory.py` | Two-stage memory — Mastra pattern |
-| `agno/models.py` | Model factory — mirrors Mastra ModelPresets |
+| `agno_ai/lib/prompts.py` | Programmatic SOUL builder — replaces SOUL.md read |
+| `agno_ai/lib/memory.py` | Two-stage memory — Mastra pattern |
+| `agno_ai/models.py` | Model factory — mirrors Mastra ModelPresets |
