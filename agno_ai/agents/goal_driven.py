@@ -59,6 +59,7 @@ class GoalDrivenAgent:
         hw: HardwareContext,
         publish_callback: Callable[[dict[str, Any]], None] | None = None,
         db_path: str | None = None,
+        os_db: "SqliteDb | None" = None,
         model_preset: str = "FAST",
         tool_call_limit: int = C.DEFAULT_MAX_ITERATIONS,
         token_reflection_threshold: int = 1500,
@@ -71,13 +72,13 @@ class GoalDrivenAgent:
 
         check_gemini_key()
 
-        db_file = db_path or (
-            ":memory:" if os.environ.get("AGNO_IN_MEMORY") else "agno.db"
-        )
-
-        self._db: SqliteDb | None = (
-            SqliteDb(db_file=db_file) if db_file != ":memory:" else None
-        )
+        if os_db is not None:
+            self._db = os_db
+        else:
+            db_file = db_path or (
+                ":memory:" if os.environ.get("AGNO_IN_MEMORY") else "agno.db"
+            )
+            self._db = SqliteDb(db_file=db_file) if db_file != ":memory:" else None
 
         agent_model = get_model(model_preset)
         compress_model = get_model(compress_model_preset)
