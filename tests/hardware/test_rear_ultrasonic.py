@@ -22,7 +22,7 @@ REAR_ECHO: int = 22
 
 SAMPLES: int = 20
 SAMPLE_INTERVAL: float = 0.2  # seconds between reads (5 Hz)
-ECHO_TIMEOUT: float = 0.04    # 40ms — covers full 400cm range with margin
+ECHO_TIMEOUT: float = 0.04  # 40ms — covers full 400cm range with margin
 
 
 def measure_once(trig: int, echo: int) -> float | None:

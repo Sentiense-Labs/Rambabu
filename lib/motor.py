@@ -30,8 +30,12 @@ class MotorController:
         self._direction = "stopped"
 
         # Obstacle check callbacks — injected by main.py after ultrasonic init
-        self._obstacle_check = None       # Returns True if path is blocked (distance <= 50cm)
-        self._obstacle_clear_check = None  # Returns True if path is clear (distance > 70cm)
+        self._obstacle_check = (
+            None  # Returns True if path is blocked (distance <= 50cm)
+        )
+        self._obstacle_clear_check = (
+            None  # Returns True if path is clear (distance > 70cm)
+        )
 
         # Hysteresis latch: once an obstacle stops forward motion, stay latched
         # until distance exceeds OBSTACLE_CLEAR_DISTANCE (70cm), or
@@ -40,8 +44,10 @@ class MotorController:
 
         # Rear obstacle latch: mirrors the front latch for backward motion.
         self._rear_obstacle_latched = False
-        self._rear_obstacle_check = None   # Returns True if rear path is blocked
-        self._rear_obstacle_clear = None   # Returns True if rear path is clear (hysteresis)
+        self._rear_obstacle_check = None  # Returns True if rear path is blocked
+        self._rear_obstacle_clear = (
+            None  # Returns True if rear path is clear (hysteresis)
+        )
 
         # Thread lock — protects direction, latches, and PWM from race conditions
         self._lock = threading.Lock()
@@ -92,7 +98,9 @@ class MotorController:
         """Engage obstacle latch — called by monitor when obstacle detected."""
         if not self._obstacle_latched:
             self._obstacle_latched = True
-            log_info("Motor: Obstacle latch engaged — forward blocked until obstacle clears")
+            log_info(
+                "Motor: Obstacle latch engaged — forward blocked until obstacle clears"
+            )
 
     def _check_latch(self) -> bool:
         """Returns True if forward is still blocked. Only releases when distance > OBSTACLE_CLEAR_DISTANCE."""
@@ -101,9 +109,15 @@ class MotorController:
         # Use the clear check (with hysteresis) if available, otherwise fall back to obstacle check
         if self._obstacle_clear_check and self._obstacle_clear_check():
             self._obstacle_latched = False
-            log_info("Motor: Obstacle latch released — path is clear (hysteresis passed)")
+            log_info(
+                "Motor: Obstacle latch released — path is clear (hysteresis passed)"
+            )
             return False
-        elif not self._obstacle_clear_check and self._obstacle_check and not self._obstacle_check():
+        elif (
+            not self._obstacle_clear_check
+            and self._obstacle_check
+            and not self._obstacle_check()
+        ):
             # Fallback: no clear_fn provided, use inverse of obstacle check
             self._obstacle_latched = False
             log_info("Motor: Obstacle latch released — path is clear")
@@ -114,7 +128,9 @@ class MotorController:
         """Engage rear obstacle latch — called by rear monitor when obstacle detected."""
         if not self._rear_obstacle_latched:
             self._rear_obstacle_latched = True
-            log_info("Motor: Rear obstacle latch engaged — backward blocked until obstacle clears")
+            log_info(
+                "Motor: Rear obstacle latch engaged — backward blocked until obstacle clears"
+            )
 
     def set_rear_obstacle_check(self, check_fn, clear_fn=None) -> None:
         """Inject rear obstacle check callbacks.
@@ -131,7 +147,9 @@ class MotorController:
             return False
         if self._rear_obstacle_clear and self._rear_obstacle_clear():
             self._rear_obstacle_latched = False
-            log_info("Motor: Rear obstacle latch released — path is clear (hysteresis passed)")
+            log_info(
+                "Motor: Rear obstacle latch released — path is clear (hysteresis passed)"
+            )
             return False
         return True
 
@@ -139,15 +157,21 @@ class MotorController:
         """Drive forward at given speed (0-100). Refuses if obstacle detected or latched."""
         if self._check_latch():
             log_info("Motor: Forward blocked — obstacle latch active")
-            return {"status": "error", "error_code": "OBSTACLE_DETECTED",
-                    "message": "Obstacle latched — path not clear yet"}
+            return {
+                "status": "error",
+                "error_code": "OBSTACLE_DETECTED",
+                "message": "Obstacle latched — path not clear yet",
+            }
 
         if self._obstacle_check and self._obstacle_check():
             self.latch_obstacle()
             self.stop()
             log_info("Motor: Forward BLOCKED by obstacle check")
-            return {"status": "error", "error_code": "OBSTACLE_DETECTED",
-                    "message": "Obstacle detected — cannot move forward"}
+            return {
+                "status": "error",
+                "error_code": "OBSTACLE_DETECTED",
+                "message": "Obstacle detected — cannot move forward",
+            }
 
         # Clear rear obstacle latch — moving forward escapes rear blockage
         self._rear_obstacle_latched = False
@@ -164,15 +188,22 @@ class MotorController:
         # Check rear obstacle latch
         if self._check_rear_latch():
             log_info("Motor: Backward blocked — rear obstacle latch active")
-            return {"status": "error", "error_code": "REAR_OBSTACLE_DETECTED",
-                    "message": "Rear obstacle latched — path not clear yet"}
+            return {
+                "status": "error",
+                "error_code": "REAR_OBSTACLE_DETECTED",
+                "message": "Rear obstacle latched — path not clear yet",
+            }
 
         # Check rear obstacle inline
         if self._rear_obstacle_check and self._rear_obstacle_check():
             self.latch_rear_obstacle()
+            self.stop()
             log_info("Motor: Backward BLOCKED by rear obstacle check")
-            return {"status": "error", "error_code": "REAR_OBSTACLE_DETECTED",
-                    "message": "Rear obstacle detected — cannot move backward"}
+            return {
+                "status": "error",
+                "error_code": "REAR_OBSTACLE_DETECTED",
+                "message": "Rear obstacle detected — cannot move backward",
+            }
 
         # Clear front obstacle latch — moving backward escapes front blockage
         if self._obstacle_latched:
@@ -260,7 +291,12 @@ class MotorController:
 
     def stop(self) -> dict:
         """Stop all motors immediately."""
-        for pwm in (self.pwm_forward, self.pwm_backward, self.pwm_steer_left, self.pwm_steer_right):
+        for pwm in (
+            self.pwm_forward,
+            self.pwm_backward,
+            self.pwm_steer_left,
+            self.pwm_steer_right,
+        ):
             if pwm is not None:
                 pwm.ChangeDutyCycle(0)
         GPIO.output(self.steer_left, GPIO.LOW)
@@ -273,7 +309,12 @@ class MotorController:
         """Clean up GPIO and PWM resources."""
         try:
             self.stop()
-            for attr in ("pwm_forward", "pwm_backward", "pwm_steer_left", "pwm_steer_right"):
+            for attr in (
+                "pwm_forward",
+                "pwm_backward",
+                "pwm_steer_left",
+                "pwm_steer_right",
+            ):
                 pwm = getattr(self, attr, None)
                 if pwm is not None:
                     pwm.stop()

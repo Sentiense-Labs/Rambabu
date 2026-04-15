@@ -98,9 +98,9 @@ class SonarGuard:
         self._on_zone_change = zone_change_callback
 
         self._lock = threading.Lock()
-        self._distance_cm: float = 999.0          # display: latest median read
-        self._safety_distance_cm: float = 999.0   # safety: pessimistic min
-        self._zone: str = ZONE_CLEAR              # safety zone (post-hysteresis)
+        self._distance_cm: float = 999.0  # display: latest median read
+        self._safety_distance_cm: float = 999.0  # safety: pessimistic min
+        self._zone: str = ZONE_CLEAR  # safety zone (post-hysteresis)
         self._pending_safer_zone: str | None = None
         self._safer_confirm_count: int = 0
         self._window: deque[float] = deque(maxlen=_GUARD_WINDOW_SIZE)
@@ -234,9 +234,7 @@ class SonarGuard:
     def _emergency_stop(self, distance: float) -> None:
         try:
             self._motor.stop()
-            logger.warning(
-                f"SonarGuard: EMERGENCY STOP — distance={distance:.1f}cm"
-            )
+            logger.warning(f"SonarGuard: EMERGENCY STOP — distance={distance:.1f}cm")
         except Exception as exc:
             logger.error(f"SonarGuard: emergency stop failed — {exc}")
 

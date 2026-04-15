@@ -17,8 +17,8 @@ PAN_MAX = 140
 PAN_CENTER = 85
 
 # Timing per 1° step
-PULSE_SEC = 0.04   # 40ms = 2 PWM cycles — enough for servo to register 1°
-DEAD_SEC = 0.01    # 10ms dead time between steps (PWM off)
+PULSE_SEC = 0.04  # 40ms = 2 PWM cycles — enough for servo to register 1°
+DEAD_SEC = 0.01  # 10ms dead time between steps (PWM off)
 
 
 def angle_to_duty(angle: int) -> float:

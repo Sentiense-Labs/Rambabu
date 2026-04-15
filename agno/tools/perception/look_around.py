@@ -19,7 +19,6 @@ from agno.types.context import HardwareContext
 from agno import constants as C
 from google import genai as google_genai
 
-
 _GEMINI_VISION_MODEL = C.GEMINI_VISION_MODEL
 _MAX_IMAGE_DIM = C.MAX_IMAGE_DIM
 _JPEG_QUALITY = C.JPEG_QUALITY

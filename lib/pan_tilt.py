@@ -35,14 +35,14 @@ _TILT_STEP_DEG: int = 5
 _TILT_TICK_SEC: float = 0.10
 
 # Smooth one-shot sweep (used by pan_to / tilt_to)
-_PAN_SWEEP_STEP: int = 1       # degrees per I2C write
+_PAN_SWEEP_STEP: int = 1  # degrees per I2C write
 _PAN_SWEEP_DELAY: float = 0.02  # seconds between steps (~50 steps/s)
 _TILT_SWEEP_STEP: int = 2
 _TILT_SWEEP_DELAY: float = 0.04
 
 # SG90 pulse range at 50Hz (20ms period), in 12-bit ticks (0-4095)
-_MIN_TICKS = 102   # 0.5ms → 0°
-_MAX_TICKS = 512   # 2.5ms → 180°
+_MIN_TICKS = 102  # 0.5ms → 0°
+_MAX_TICKS = 512  # 2.5ms → 180°
 
 
 def _angle_to_ticks(angle: int) -> int:
@@ -89,7 +89,9 @@ class PanTilt:
                 time.sleep(0.005)
                 prescale = _prescale_value(config.SERVO_PWM_FREQ)
                 self._bus.write_byte_data(self._addr, _PRESCALE, prescale)
-                self._bus.write_byte_data(self._addr, _MODE1, 0x20)  # wake + auto-increment
+                self._bus.write_byte_data(
+                    self._addr, _MODE1, 0x20
+                )  # wake + auto-increment
                 time.sleep(0.005)
                 return
             except OSError:
@@ -111,8 +113,10 @@ class PanTilt:
                 return
             except OSError:
                 if attempt == 4:
-                    log_error(f"PCA9685 I2C write failed after 5 retries (ch={channel})")
-                time.sleep(0.01 * (2 ** attempt))
+                    log_error(
+                        f"PCA9685 I2C write failed after 5 retries (ch={channel})"
+                    )
+                time.sleep(0.01 * (2**attempt))
 
     def _kill_channel(self, channel: int) -> None:
         """Turn off PWM on a single channel (full-off bit)."""
@@ -152,8 +156,12 @@ class PanTilt:
         self._write_servo(config.SERVO_TILT_CHANNEL, servo_angle)
 
     def _sweep_channel(
-        self, channel: int, from_servo: int, to_servo: int,
-        step: int, delay: float,
+        self,
+        channel: int,
+        from_servo: int,
+        to_servo: int,
+        step: int,
+        delay: float,
     ) -> None:
         """Sweep a servo degree-by-degree from from_servo to to_servo.
 
@@ -182,8 +190,11 @@ class PanTilt:
         from_servo = self._clamp(self.pan_angle + config.PAN_OFFSET, 0, 180)
         to_servo = self._clamp(logical_angle + config.PAN_OFFSET, 0, 180)
         self._sweep_channel(
-            config.SERVO_PAN_CHANNEL, from_servo, to_servo,
-            _PAN_SWEEP_STEP, _PAN_SWEEP_DELAY,
+            config.SERVO_PAN_CHANNEL,
+            from_servo,
+            to_servo,
+            _PAN_SWEEP_STEP,
+            _PAN_SWEEP_DELAY,
         )
 
     def _move_and_kill_tilt(self, logical_angle: int) -> None:
@@ -191,8 +202,11 @@ class PanTilt:
         from_servo = self._clamp(self.tilt_angle + config.TILT_OFFSET, 0, 180)
         to_servo = self._clamp(logical_angle + config.TILT_OFFSET, 0, 180)
         self._sweep_channel(
-            config.SERVO_TILT_CHANNEL, from_servo, to_servo,
-            _TILT_SWEEP_STEP, _TILT_SWEEP_DELAY,
+            config.SERVO_TILT_CHANNEL,
+            from_servo,
+            to_servo,
+            _TILT_SWEEP_STEP,
+            _TILT_SWEEP_DELAY,
         )
 
     def _stop_current_movement(self) -> None:
@@ -300,26 +314,41 @@ class PanTilt:
         return {"status": "ok", "action": "pan_right_start"}
 
     def up_left_start(self) -> dict:
-        self._start_movement(-_PAN_STEP_DEG * config.PAN_DIRECTION, _TILT_STEP_DEG * config.TILT_DIRECTION)
+        self._start_movement(
+            -_PAN_STEP_DEG * config.PAN_DIRECTION,
+            _TILT_STEP_DEG * config.TILT_DIRECTION,
+        )
         return {"status": "ok", "action": "up_left_start"}
 
     def up_right_start(self) -> dict:
-        self._start_movement(_PAN_STEP_DEG * config.PAN_DIRECTION, _TILT_STEP_DEG * config.TILT_DIRECTION)
+        self._start_movement(
+            _PAN_STEP_DEG * config.PAN_DIRECTION, _TILT_STEP_DEG * config.TILT_DIRECTION
+        )
         return {"status": "ok", "action": "up_right_start"}
 
     def down_left_start(self) -> dict:
-        self._start_movement(-_PAN_STEP_DEG * config.PAN_DIRECTION, -_TILT_STEP_DEG * config.TILT_DIRECTION)
+        self._start_movement(
+            -_PAN_STEP_DEG * config.PAN_DIRECTION,
+            -_TILT_STEP_DEG * config.TILT_DIRECTION,
+        )
         return {"status": "ok", "action": "down_left_start"}
 
     def down_right_start(self) -> dict:
-        self._start_movement(_PAN_STEP_DEG * config.PAN_DIRECTION, -_TILT_STEP_DEG * config.TILT_DIRECTION)
+        self._start_movement(
+            _PAN_STEP_DEG * config.PAN_DIRECTION,
+            -_TILT_STEP_DEG * config.TILT_DIRECTION,
+        )
         return {"status": "ok", "action": "down_right_start"}
 
     def servo_stop(self) -> dict:
         self._stop_current_movement()
         log_info(f"Servo stopped — pan={self.pan_angle}° tilt={self.tilt_angle}°")
-        return {"status": "ok", "action": "servo_stop",
-                "pan": self.pan_angle, "tilt": self.tilt_angle}
+        return {
+            "status": "ok",
+            "action": "servo_stop",
+            "pan": self.pan_angle,
+            "tilt": self.tilt_angle,
+        }
 
     # ── Utility ───────────────────────────────────────────────────────────
 

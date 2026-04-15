@@ -13,12 +13,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import config
 from lib.pan_tilt_gpiozero import PanTilt
 
-STEP_DEG = 1       # 1° per step
+STEP_DEG = 1  # 1° per step
 STEP_DELAY = 0.05  # 50ms = 20°/sec
-HOLD_DELAY = 1.0   # Pause at each end
+HOLD_DELAY = 1.0  # Pause at each end
 
 
-def sweep(pan_tilt: PanTilt, name: str, min_angle: int, max_angle: int, passes: int = 3) -> None:
+def sweep(
+    pan_tilt: PanTilt, name: str, min_angle: int, max_angle: int, passes: int = 3
+) -> None:
     print(f"\n{name}: sweeping {min_angle}° → {max_angle}° ({passes} passes)")
     print("Watch the servo — hardware PWM should be smooth with no twitches.\n")
 
@@ -33,7 +35,9 @@ def sweep(pan_tilt: PanTilt, name: str, min_angle: int, max_angle: int, passes: 
                 pan_tilt.tilt_angle = angle
             time.sleep(STEP_DELAY)
 
-        print(f"  Pass {i+1}/{passes} — holding at {max_angle}° (hardware PWM active)...")
+        print(
+            f"  Pass {i+1}/{passes} — holding at {max_angle}° (hardware PWM active)..."
+        )
         time.sleep(HOLD_DELAY)
 
         # Reverse pass

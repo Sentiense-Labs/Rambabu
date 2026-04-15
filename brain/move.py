@@ -31,10 +31,10 @@ from lib.ultrasonic import Ultrasonic
 # Tunables
 # ---------------------------------------------------------------------------
 
-DRIVE_SPEED = 80             # 0-100 motor speed
-MAX_DURATION = 9.0           # Seconds — hard cap on any single command
-REVERSE_MAX_DURATION = 0.5   # Hard cap for any reverse-family direction
-SAFETY_DISTANCE_CM = 50.0    # Refuse/abort forward if sonar drops below this
+DRIVE_SPEED = 80  # 0-100 motor speed
+MAX_DURATION = 9.0  # Seconds — hard cap on any single command
+REVERSE_MAX_DURATION = 0.5  # Hard cap for any reverse-family direction
+SAFETY_DISTANCE_CM = 50.0  # Refuse/abort forward if sonar drops below this
 SAFETY_POLL_INTERVAL = 0.05  # Check distance every 50ms while driving
 
 # ---------------------------------------------------------------------------
@@ -53,6 +53,7 @@ logger = logging.getLogger("move")
 # Hardware lifecycle
 # ---------------------------------------------------------------------------
 
+
 def init_hardware(
     need_sonar: bool,
 ) -> tuple[MotorController, Ultrasonic | None]:
@@ -67,9 +68,7 @@ def init_hardware(
     return motor, ultra
 
 
-def cleanup_hardware(
-    motor: MotorController | None, ultra: Ultrasonic | None
-) -> None:
+def cleanup_hardware(motor: MotorController | None, ultra: Ultrasonic | None) -> None:
     """Best-effort cleanup — never raises."""
     if motor is not None:
         try:
@@ -91,6 +90,7 @@ def cleanup_hardware(
 # ---------------------------------------------------------------------------
 # Movement with safety
 # ---------------------------------------------------------------------------
+
 
 def drive_forward_safe(
     motor: MotorController, ultra: Ultrasonic, duration: float
@@ -136,13 +136,19 @@ def drive_forward_safe(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Move Rambabu briefly")
     parser.add_argument(
         "direction",
         choices=[
-            "forward", "back", "left", "right", "stop",
-            "back_left", "back_right",
+            "forward",
+            "back",
+            "left",
+            "right",
+            "stop",
+            "back_left",
+            "back_right",
         ],
         help="Direction of travel (left/right steer while driving forward)",
     )
@@ -158,8 +164,12 @@ def main() -> None:
     # Validate duration for moving actions
     if args.direction != "stop":
         if args.duration <= 0:
-            print({"status": "error",
-                   "message": f"'{args.direction}' needs a duration in seconds"})
+            print(
+                {
+                    "status": "error",
+                    "message": f"'{args.direction}' needs a duration in seconds",
+                }
+            )
             sys.exit(2)
         if args.duration > MAX_DURATION:
             logger.warning(

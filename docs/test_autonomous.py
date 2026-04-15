@@ -13,6 +13,7 @@ Safety rules:
 """
 
 import sys
+
 sys.path.insert(0, "/home/rambabu/rambabu_rc")
 
 import argparse
@@ -22,26 +23,27 @@ import signal
 import time
 
 from dotenv import load_dotenv
+
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-import cv2
-import RPi.GPIO as GPIO
+import cv2  # noqa: E402
+import RPi.GPIO as GPIO  # noqa: E402
 
-import config
-from lib.motor import MotorController
-from lib.camera import Camera
-from lib.ultrasonic import Ultrasonic
-from lib.pan_tilt import PanTilt
+import config  # noqa: E402
+from lib.motor import MotorController  # noqa: E402
+from lib.camera import Camera  # noqa: E402
+from lib.ultrasonic import Ultrasonic  # noqa: E402
+from lib.pan_tilt import PanTilt  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-FORWARD_SPEED = 80          # Enough torque to move on ground
-TURN_SPEED = 80             # Enough torque to turn on ground
-SCAN_THRESHOLD_CM = 60.0    # Stop-and-scan threshold
-TURN_DURATION = 0.8         # Seconds to drive while turning
-LOOP_INTERVAL = 0.1         # Main loop sleep (seconds)
+FORWARD_SPEED = 80  # Enough torque to move on ground
+TURN_SPEED = 80  # Enough torque to turn on ground
+SCAN_THRESHOLD_CM = 60.0  # Stop-and-scan threshold
+TURN_DURATION = 0.8  # Seconds to drive while turning
+LOOP_INTERVAL = 0.1  # Main loop sleep (seconds)
 SAFETY_CHECK_INTERVAL = 0.05  # During movement, check every 50ms
 
 LOG_DIR = "/home/rambabu/rambabu_rc/logs"
@@ -152,6 +154,7 @@ def cleanup_hardware() -> None:
 # Safety
 # ---------------------------------------------------------------------------
 
+
 def is_safe_to_move() -> bool:
     """True if distance >= SCAN_THRESHOLD_CM."""
     return ultra.get_distance() >= SCAN_THRESHOLD_CM
@@ -160,6 +163,7 @@ def is_safe_to_move() -> bool:
 # ---------------------------------------------------------------------------
 # Camera capture helpers
 # ---------------------------------------------------------------------------
+
 
 def capture_jpeg() -> bytes | None:
     """Capture a single JPEG frame. Returns bytes or None."""
@@ -208,6 +212,7 @@ def capture_left_right() -> tuple[bytes | None, bytes | None]:
 # ---------------------------------------------------------------------------
 # Claude Vision API — direction decision
 # ---------------------------------------------------------------------------
+
 
 def ask_claude_direction(left_img: bytes, right_img: bytes) -> str:
     """Send left and right images to Gemini Flash for direction decision.
@@ -268,6 +273,7 @@ def ask_claude_direction(left_img: bytes, right_img: bytes) -> str:
 # Movement with safety
 # ---------------------------------------------------------------------------
 
+
 def safe_forward(duration: float) -> bool:
     """Drive forward at FORWARD_SPEED for up to `duration` seconds.
 
@@ -327,6 +333,7 @@ def execute_turn(direction: str) -> None:
 # One autonomous cycle
 # ---------------------------------------------------------------------------
 
+
 def run_one_cycle(_driving: list[bool] = [False]) -> str:
     """Run a single autonomous cycle. Returns a status string.
 
@@ -364,6 +371,7 @@ def run_one_cycle(_driving: list[bool] = [False]) -> str:
 # Signal handling
 # ---------------------------------------------------------------------------
 
+
 def _signal_handler(sig, frame):
     global _shutdown
     logger.info(f"Signal {sig} received — shutting down...")
@@ -377,6 +385,7 @@ signal.signal(signal.SIGTERM, _signal_handler)
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Autonomous obstacle avoidance test")

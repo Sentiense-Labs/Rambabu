@@ -87,7 +87,9 @@ class MqttClient:
             if rc.value <= 2:
                 log_info(f"MQTT: SUBACK mid={mid} [{i}] granted QoS={rc.value}")
             else:
-                log_error(f"MQTT: SUBACK mid={mid} [{i}] REJECTED — code={rc.value} ({rc})")
+                log_error(
+                    f"MQTT: SUBACK mid={mid} [{i}] REJECTED — code={rc.value} ({rc})"
+                )
 
     def _on_disconnect(self, client, userdata, flags, reason_code, properties):
         with self._lock:
@@ -136,7 +138,11 @@ class MqttClient:
             return {"status": "ok", "action": "connect"}
         except Exception as e:
             log_error(f"MQTT: Connect failed — {e}")
-            return {"status": "error", "error_code": "MQTT_CONNECT_FAILED", "message": str(e)}
+            return {
+                "status": "error",
+                "error_code": "MQTT_CONNECT_FAILED",
+                "message": str(e),
+            }
 
     def disconnect(self) -> dict:
         """Disconnect from AWS IoT Core and stop network loop."""
@@ -154,7 +160,11 @@ class MqttClient:
     def publish(self, topic: str, payload: dict, qos: int = 1) -> dict:
         """Publish a JSON message to a topic."""
         if not self.is_connected:
-            return {"status": "error", "error_code": "MQTT_NOT_CONNECTED", "message": "Not connected"}
+            return {
+                "status": "error",
+                "error_code": "MQTT_NOT_CONNECTED",
+                "message": "Not connected",
+            }
 
         try:
             message = json.dumps(payload)
@@ -163,7 +173,11 @@ class MqttClient:
             return {"status": "ok", "topic": topic, "mid": result.mid}
         except Exception as e:
             log_error(f"MQTT: Publish failed — {e}")
-            return {"status": "error", "error_code": "MQTT_PUBLISH_FAILED", "message": str(e)}
+            return {
+                "status": "error",
+                "error_code": "MQTT_PUBLISH_FAILED",
+                "message": str(e),
+            }
 
     def publish_telemetry(self, data: dict) -> dict:
         """Publish to the telemetry topic."""

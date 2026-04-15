@@ -29,22 +29,22 @@ from dotenv import load_dotenv
 sys.path.insert(0, "/home/rambabu/rambabu_rc")
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-import cv2
-import RPi.GPIO as GPIO
-from google import genai  # type: ignore
-from google.genai import types  # type: ignore
-from PIL import Image
+import cv2  # noqa: E402
+import RPi.GPIO as GPIO  # noqa: E402
+from google import genai  # type: ignore  # noqa: E402
+from google.genai import types  # type: ignore  # noqa: E402
+from PIL import Image  # noqa: E402
 
-from lib.camera import Camera
-from lib.speaker import Speaker
-from utils.elevenlabs import synthesize
+from lib.camera import Camera  # noqa: E402
+from lib.speaker import Speaker  # noqa: E402
+from utils.elevenlabs import synthesize  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Tunables
 # ---------------------------------------------------------------------------
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"  # Fastest multimodal Gemini
-MAX_IMAGE_DIM = 512                     # Downscale before sending to Gemini
+MAX_IMAGE_DIM = 512  # Downscale before sending to Gemini
 JPEG_QUALITY = 80
 
 # ---------------------------------------------------------------------------
@@ -62,6 +62,7 @@ logger = logging.getLogger("look_around")
 # ---------------------------------------------------------------------------
 # Hardware init — camera and speaker initialize in parallel
 # ---------------------------------------------------------------------------
+
 
 def _init_camera() -> Camera:
     camera = Camera()
@@ -128,15 +129,14 @@ def cleanup_hardware(camera: Camera | None, speaker: Speaker | None) -> None:
 # Capture
 # ---------------------------------------------------------------------------
 
+
 def capture_jpeg(camera: Camera) -> bytes | None:
     """Grab a single frame and JPEG-encode it. Returns bytes or None."""
     frame = camera.get_frame()
     if frame is None:
         logger.error("Camera returned no frame")
         return None
-    ok, jpeg = cv2.imencode(
-        ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY]
-    )
+    ok, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
     if not ok:
         logger.error("JPEG encoding failed")
         return None
@@ -169,7 +169,7 @@ def build_prompt(instruction: str | None) -> str:
     """Compose the Gemini prompt, folding in an optional user instruction."""
     if instruction and instruction.strip():
         task = (
-            f"The user just told you: \"{instruction.strip()}\"\n"
+            f'The user just told you: "{instruction.strip()}"\n'
             "Respond to that request based on what you see in the image, "
             "in 2-3 short conversational sentences — first person, present "
             "tense. Stay in character as Rambabu."
@@ -196,9 +196,7 @@ def describe_scene(jpeg: bytes, instruction: str | None = None) -> str | None:
         # Re-encode as JPEG for the new SDK (does not accept PIL directly).
         buf = io.BytesIO()
         image.save(buf, format="JPEG", quality=JPEG_QUALITY)
-        image_part = types.Part.from_bytes(
-            data=buf.getvalue(), mime_type="image/jpeg"
-        )
+        image_part = types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")
 
         client = genai.Client(api_key=api_key)
         prompt = build_prompt(instruction)
@@ -226,6 +224,7 @@ def describe_scene(jpeg: bytes, instruction: str | None = None) -> str | None:
 # Speech
 # ---------------------------------------------------------------------------
 
+
 def speak(speaker: Speaker, text: str) -> None:
     """Speak `text` via ElevenLabs, fall back to pyttsx3 on failure."""
     t0 = time.time()
@@ -241,6 +240,7 @@ def speak(speaker: Speaker, text: str) -> None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Rambabu look-around")

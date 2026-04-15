@@ -30,7 +30,6 @@ import httpx
 import config
 from utils.logger import log_info, log_error, log_warning
 
-
 # Expressions like [excited], [sighs], [curious] are stripped before
 # synthesis — these are stage directions meant for the reasoning model,
 # not the voice.

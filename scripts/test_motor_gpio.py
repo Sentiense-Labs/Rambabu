@@ -20,7 +20,7 @@ MOTOR_A2 = 26  # L9110S A-IB  (was GPIO 19 on ESP32)
 MOTOR_B1 = 27  # L9110S B-IA  (was GPIO 14 on ESP32)
 MOTOR_B2 = 14  # L9110S B-IB  (was GPIO 27 on ESP32)
 
-STEP_DELAY = 1.0   # seconds per movement
+STEP_DELAY = 1.0  # seconds per movement
 PAUSE_DELAY = 0.5  # seconds between movements
 
 
@@ -30,7 +30,9 @@ def setup():
     for pin in (MOTOR_A1, MOTOR_A2, MOTOR_B1, MOTOR_B2):
         GPIO.setup(pin, GPIO.OUT)
         GPIO.output(pin, GPIO.LOW)
-    print(f"GPIO setup done. Pins: A1={MOTOR_A1}, A2={MOTOR_A2}, B1={MOTOR_B1}, B2={MOTOR_B2}\n")
+    print(
+        f"GPIO setup done. Pins: A1={MOTOR_A1}, A2={MOTOR_A2}, B1={MOTOR_B1}, B2={MOTOR_B2}\n"
+    )
 
 
 def stop():
@@ -77,14 +79,22 @@ def turn_right():
 
 def run_cycle(cycle: int):
     print(f"\n─── Cycle {cycle} ───────────────────────────")
-    forward();   time.sleep(STEP_DELAY)
-    stop();      time.sleep(PAUSE_DELAY)
-    backward();  time.sleep(STEP_DELAY)
-    stop();      time.sleep(PAUSE_DELAY)
-    turn_left(); time.sleep(STEP_DELAY)
-    stop();      time.sleep(PAUSE_DELAY)
-    turn_right();time.sleep(STEP_DELAY)
-    stop();      time.sleep(2.0)
+    forward()
+    time.sleep(STEP_DELAY)
+    stop()
+    time.sleep(PAUSE_DELAY)
+    backward()
+    time.sleep(STEP_DELAY)
+    stop()
+    time.sleep(PAUSE_DELAY)
+    turn_left()
+    time.sleep(STEP_DELAY)
+    stop()
+    time.sleep(PAUSE_DELAY)
+    turn_right()
+    time.sleep(STEP_DELAY)
+    stop()
+    time.sleep(2.0)
 
 
 def main():

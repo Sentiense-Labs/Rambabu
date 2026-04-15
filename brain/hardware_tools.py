@@ -28,6 +28,7 @@ from utils.elevenlabs import synthesize
 # Hardware context
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class HardwareContext:
     """Holds references to live hardware objects from main.py.
@@ -35,18 +36,20 @@ class HardwareContext:
     Any field may be None if that peripheral failed to initialise —
     the corresponding tool will fall back to subprocess mode.
     """
-    motor: Any = None             # lib.motor.MotorController
-    ultrasonic: Any = None        # lib.ultrasonic.Ultrasonic
-    pan_tilt: Any = None          # lib.pan_tilt.PanTilt
-    camera: Any = None            # lib.camera.Camera
-    speaker: Any = None           # lib.speaker.Speaker
-    sonar_guard: Any = None       # brain.sonar_guard.SonarGuard
+
+    motor: Any = None  # lib.motor.MotorController
+    ultrasonic: Any = None  # lib.ultrasonic.Ultrasonic
+    pan_tilt: Any = None  # lib.pan_tilt.PanTilt
+    camera: Any = None  # lib.camera.Camera
+    speaker: Any = None  # lib.speaker.Speaker
+    sonar_guard: Any = None  # brain.sonar_guard.SonarGuard
     movement_manager: Any = None  # brain.movement_manager.MovementManager
 
 
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
 
 def _zone(distance_cm: float) -> str:
     if distance_cm < 20:
@@ -101,6 +104,7 @@ def _build_look_around_prompt(question: str | None) -> str:
 # ---------------------------------------------------------------------------
 # distance
 # ---------------------------------------------------------------------------
+
 
 def execute_distance(hw: HardwareContext, _args: dict[str, Any]) -> ToolResult:
     """Read forward ultrasonic distance.
@@ -244,6 +248,7 @@ def execute_stop_moving(hw: HardwareContext, _args: dict[str, Any]) -> ToolResul
 # move
 # ---------------------------------------------------------------------------
 
+
 def execute_move(hw: HardwareContext, args: dict[str, Any]) -> ToolResult:
     """Drive the rover using live MotorController + Ultrasonic."""
     started = time.time()
@@ -255,74 +260,88 @@ def execute_move(hw: HardwareContext, args: dict[str, Any]) -> ToolResult:
         if direction == "stop":
             hw.motor.stop()
             output = str({"status": "ok", "action": "stop"})
-            return ToolResult(name="move", ok=True, output=output,
-                              elapsed_s=time.time() - started)
+            return ToolResult(
+                name="move", ok=True, output=output, elapsed_s=time.time() - started
+            )
 
         # Safety check before any forward-direction move
         if direction in ("forward", "left", "right") and hw.ultrasonic is not None:
             dist = hw.ultrasonic.get_distance()
             if dist < _SAFETY_DISTANCE_CM:
-                output = str({
-                    "status": "blocked",
-                    "reason": "obstacle_too_close",
-                    "distance_cm": round(dist, 1),
-                    "threshold_cm": _SAFETY_DISTANCE_CM,
-                })
-                return ToolResult(name="move", ok=False, output=output,
-                                  elapsed_s=time.time() - started)
+                output = str(
+                    {
+                        "status": "blocked",
+                        "reason": "obstacle_too_close",
+                        "distance_cm": round(dist, 1),
+                        "threshold_cm": _SAFETY_DISTANCE_CM,
+                    }
+                )
+                return ToolResult(
+                    name="move",
+                    ok=False,
+                    output=output,
+                    elapsed_s=time.time() - started,
+                )
 
         if direction == "forward":
             hw.motor.front(_DRIVE_SPEED)
             time.sleep(seconds)
             hw.motor.stop()
             final = hw.ultrasonic.get_distance() if hw.ultrasonic else 0.0
-            output = str({
-                "status": "ok",
-                "direction": "forward",
-                "duration_s": round(seconds, 2),
-                "final_distance_cm": round(final, 1),
-            })
+            output = str(
+                {
+                    "status": "ok",
+                    "direction": "forward",
+                    "duration_s": round(seconds, 2),
+                    "final_distance_cm": round(final, 1),
+                }
+            )
 
         elif direction == "back":
-            seconds = min(seconds, 0.5)  # hard cap — no rear sensor
+            # Rear HC-SR04 guards this via motor.back() inline check +
+            # rear_obstacle_monitor thread — no manual cap needed.
             hw.motor.back(_DRIVE_SPEED)
             time.sleep(seconds)
             hw.motor.stop()
-            output = str({
-                "status": "ok",
-                "direction": "back",
-                "duration_s": round(seconds, 2),
-            })
+            output = str(
+                {
+                    "status": "ok",
+                    "direction": "back",
+                    "duration_s": round(seconds, 2),
+                }
+            )
 
         elif direction == "back_left":
             # During reverse, left steer swings the FRONT right, rear left.
-            seconds = min(seconds, 0.5)
             hw.motor.steer_left_hold()
             hw.motor.back(_DRIVE_SPEED)
             time.sleep(seconds)
             hw.motor.stop()
             hw.motor.steer_center()
-            output = str({
-                "status": "ok",
-                "direction": "back_left",
-                "duration_s": round(seconds, 2),
-                "note": "front swung RIGHT, rear swung LEFT",
-            })
+            output = str(
+                {
+                    "status": "ok",
+                    "direction": "back_left",
+                    "duration_s": round(seconds, 2),
+                    "note": "front swung RIGHT, rear swung LEFT",
+                }
+            )
 
         elif direction == "back_right":
             # During reverse, right steer swings the FRONT left, rear right.
-            seconds = min(seconds, 0.5)
             hw.motor.steer_right_hold()
             hw.motor.back(_DRIVE_SPEED)
             time.sleep(seconds)
             hw.motor.stop()
             hw.motor.steer_center()
-            output = str({
-                "status": "ok",
-                "direction": "back_right",
-                "duration_s": round(seconds, 2),
-                "note": "front swung LEFT, rear swung RIGHT",
-            })
+            output = str(
+                {
+                    "status": "ok",
+                    "direction": "back_right",
+                    "duration_s": round(seconds, 2),
+                    "note": "front swung LEFT, rear swung RIGHT",
+                }
+            )
 
         elif direction == "left":
             hw.motor.steer_left_hold()
@@ -331,12 +350,14 @@ def execute_move(hw: HardwareContext, args: dict[str, Any]) -> ToolResult:
             hw.motor.stop()
             hw.motor.steer_center()
             final = hw.ultrasonic.get_distance() if hw.ultrasonic else 0.0
-            output = str({
-                "status": "ok",
-                "direction": "left",
-                "duration_s": round(seconds, 2),
-                "final_distance_cm": round(final, 1),
-            })
+            output = str(
+                {
+                    "status": "ok",
+                    "direction": "left",
+                    "duration_s": round(seconds, 2),
+                    "final_distance_cm": round(final, 1),
+                }
+            )
 
         elif direction == "right":
             hw.motor.steer_right_hold()
@@ -345,31 +366,41 @@ def execute_move(hw: HardwareContext, args: dict[str, Any]) -> ToolResult:
             hw.motor.stop()
             hw.motor.steer_center()
             final = hw.ultrasonic.get_distance() if hw.ultrasonic else 0.0
-            output = str({
-                "status": "ok",
-                "direction": "right",
-                "duration_s": round(seconds, 2),
-                "final_distance_cm": round(final, 1),
-            })
+            output = str(
+                {
+                    "status": "ok",
+                    "direction": "right",
+                    "duration_s": round(seconds, 2),
+                    "final_distance_cm": round(final, 1),
+                }
+            )
 
         else:
-            output = str({"status": "error", "message": f"unknown direction: {direction}"})
-            return ToolResult(name="move", ok=False, output=output,
-                              elapsed_s=time.time() - started)
+            output = str(
+                {"status": "error", "message": f"unknown direction: {direction}"}
+            )
+            return ToolResult(
+                name="move", ok=False, output=output, elapsed_s=time.time() - started
+            )
 
-        return ToolResult(name="move", ok=True, output=output,
-                          elapsed_s=time.time() - started)
+        return ToolResult(
+            name="move", ok=True, output=output, elapsed_s=time.time() - started
+        )
 
     except Exception as exc:
         hw.motor.stop()
-        return ToolResult(name="move", ok=False,
-                          output=str({"status": "error", "message": str(exc)}),
-                          elapsed_s=time.time() - started)
+        return ToolResult(
+            name="move",
+            ok=False,
+            output=str({"status": "error", "message": str(exc)}),
+            elapsed_s=time.time() - started,
+        )
 
 
 # ---------------------------------------------------------------------------
 # pan_tilt
 # ---------------------------------------------------------------------------
+
 
 def execute_pan_tilt(hw: HardwareContext, args: dict[str, Any]) -> ToolResult:
     """Move camera servos using the live PanTilt instance."""
@@ -401,14 +432,18 @@ def execute_pan_tilt(hw: HardwareContext, args: dict[str, Any]) -> ToolResult:
             elapsed_s=time.time() - started,
         )
     except Exception as exc:
-        return ToolResult(name="pan_tilt", ok=False,
-                          output=str({"status": "error", "message": str(exc)}),
-                          elapsed_s=time.time() - started)
+        return ToolResult(
+            name="pan_tilt",
+            ok=False,
+            output=str({"status": "error", "message": str(exc)}),
+            elapsed_s=time.time() - started,
+        )
 
 
 # ---------------------------------------------------------------------------
 # look_around
 # ---------------------------------------------------------------------------
+
 
 def execute_look_around(hw: HardwareContext, args: dict[str, Any]) -> ToolResult:
     """Capture a frame and describe it using Gemini Vision."""
@@ -421,26 +456,30 @@ def execute_look_around(hw: HardwareContext, args: dict[str, Any]) -> ToolResult
     try:
         frame = hw.camera.get_frame()
         if frame is None:
-            return ToolResult(name="look_around", ok=False,
-                              output="error: camera returned no frame",
-                              elapsed_s=time.time() - started)
+            return ToolResult(
+                name="look_around",
+                ok=False,
+                output="error: camera returned no frame",
+                elapsed_s=time.time() - started,
+            )
 
         ok, jpeg_buf = cv2.imencode(
             ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, _JPEG_QUALITY]
         )
         if not ok:
-            return ToolResult(name="look_around", ok=False,
-                              output="error: JPEG encoding failed",
-                              elapsed_s=time.time() - started)
+            return ToolResult(
+                name="look_around",
+                ok=False,
+                output="error: JPEG encoding failed",
+                elapsed_s=time.time() - started,
+            )
 
         image = Image.open(io.BytesIO(jpeg_buf.tobytes()))
         image.thumbnail((_MAX_IMAGE_DIM, _MAX_IMAGE_DIM))
         buf = io.BytesIO()
         image.save(buf, format="JPEG", quality=_JPEG_QUALITY)
 
-        image_part = types.Part.from_bytes(
-            data=buf.getvalue(), mime_type="image/jpeg"
-        )
+        image_part = types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")
         api_key = os.environ.get("GOOGLE_GENERATIVE_AI_API_KEY", "")
         client = genai.Client(api_key=api_key)
         prompt = _build_look_around_prompt(question)
@@ -450,31 +489,45 @@ def execute_look_around(hw: HardwareContext, args: dict[str, Any]) -> ToolResult
         )
         description = (response.text or "").strip()
         if not description:
-            return ToolResult(name="look_around", ok=False,
-                              output="error: Gemini returned empty description",
-                              elapsed_s=time.time() - started)
+            return ToolResult(
+                name="look_around",
+                ok=False,
+                output="error: Gemini returned empty description",
+                elapsed_s=time.time() - started,
+            )
 
-        return ToolResult(name="look_around", ok=True, output=description,
-                          elapsed_s=time.time() - started)
+        return ToolResult(
+            name="look_around",
+            ok=True,
+            output=description,
+            elapsed_s=time.time() - started,
+        )
 
     except Exception as exc:
-        return ToolResult(name="look_around", ok=False,
-                          output=f"error: {exc}",
-                          elapsed_s=time.time() - started)
+        return ToolResult(
+            name="look_around",
+            ok=False,
+            output=f"error: {exc}",
+            elapsed_s=time.time() - started,
+        )
 
 
 # ---------------------------------------------------------------------------
 # say
 # ---------------------------------------------------------------------------
 
+
 def execute_say(hw: HardwareContext, args: dict[str, Any]) -> ToolResult:
     """Speak text using the live Speaker instance."""
     started = time.time()
     text = (args.get("text") or "").strip()
     if not text:
-        return ToolResult(name="say", ok=False,
-                          output="status: error\nmessage: no text provided",
-                          elapsed_s=time.time() - started)
+        return ToolResult(
+            name="say",
+            ok=False,
+            output="status: error\nmessage: no text provided",
+            elapsed_s=time.time() - started,
+        )
     try:
         mp3 = synthesize(text)
         if mp3 is not None:
@@ -483,9 +536,13 @@ def execute_say(hw: HardwareContext, args: dict[str, Any]) -> ToolResult:
         else:
             hw.speaker.speak_sync(text)
             output = "status: ok\nengine: pyttsx3"
-        return ToolResult(name="say", ok=True, output=output,
-                          elapsed_s=time.time() - started)
+        return ToolResult(
+            name="say", ok=True, output=output, elapsed_s=time.time() - started
+        )
     except Exception as exc:
-        return ToolResult(name="say", ok=False,
-                          output=f"status: error\nmessage: {exc}",
-                          elapsed_s=time.time() - started)
+        return ToolResult(
+            name="say",
+            ok=False,
+            output=f"status: error\nmessage: {exc}",
+            elapsed_s=time.time() - started,
+        )

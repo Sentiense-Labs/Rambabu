@@ -38,6 +38,7 @@ obstacle_monitor_thread = None
 rear_monitor_thread = None
 mqtt_client = None
 ble_server = None
+_cleanup_done = False  # guard against double-cleanup on SIGINT
 
 # Commented out for testing
 # pan_tilt = None
@@ -65,9 +66,8 @@ def obstacle_monitor():
     while True:
         try:
             if ultrasonic and motor and motor.is_moving_forward:
-                distance = ultrasonic.get_distance()
-                log_info(f"Obstacle monitor: distance={distance:.1f}cm")
                 if ultrasonic.is_obstacle_confirmed():
+                    distance = ultrasonic.get_distance()
                     log_info(
                         f"Obstacle monitor: STOP at {distance:.1f}cm "
                         f"(confirmed obstacle <= {config.OBSTACLE_DETECTION_DISTANCE}cm)"
@@ -115,18 +115,13 @@ def rear_obstacle_monitor() -> None:
 
 def cleanup():
     """Clean up all hardware resources in reverse order"""
+    global _cleanup_done
+    if _cleanup_done:
+        return
+    _cleanup_done = True
     log_info("=== Starting Shutdown Sequence ===")
 
-    global \
-        motor, \
-        pan_tilt, \
-        ultrasonic, \
-        rear_ultrasonic, \
-        speaker, \
-        camera, \
-        flask_thread, \
-        mqtt_client, \
-        ble_server
+    global motor, pan_tilt, ultrasonic, rear_ultrasonic, speaker, camera, flask_thread, mqtt_client, ble_server
 
     # Stop camera
     if camera:
@@ -196,19 +191,7 @@ def run_flask_server():
 
 def main():
     """Main entry point"""
-    global \
-        motor, \
-        pan_tilt, \
-        ultrasonic, \
-        rear_ultrasonic, \
-        speaker, \
-        camera, \
-        flask_app, \
-        flask_thread, \
-        obstacle_monitor_thread, \
-        rear_monitor_thread, \
-        mqtt_client, \
-        ble_server
+    global motor, pan_tilt, ultrasonic, rear_ultrasonic, speaker, camera, flask_app, flask_thread, obstacle_monitor_thread, rear_monitor_thread, mqtt_client, ble_server
 
     # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)
@@ -378,7 +361,7 @@ def main():
                     config.MQTT_CONTROL_RESULT_TOPIC, result
                 ),
             )
-            explorer_agent = ExplorerAgent(
+            _explorer_agent = ExplorerAgent(
                 hw=hw,
                 publish_callback=lambda result: mqtt_client.publish(
                     config.MQTT_CONTROL_RESULT_TOPIC, result

@@ -13,7 +13,6 @@ from agno.types.context import HardwareContext
 from agno import constants as C
 import time
 
-
 _DRIVE_SPEED = C.DRIVE_SPEED
 _SAFETY_DISTANCE_CM = C.ZONE_CLOSE_CM
 

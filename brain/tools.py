@@ -146,8 +146,13 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "direction": {
                         "type": "string",
                         "enum": [
-                            "forward", "back", "left", "right", "stop",
-                            "back_left", "back_right",
+                            "forward",
+                            "back",
+                            "left",
+                            "right",
+                            "stop",
+                            "back_left",
+                            "back_right",
                         ],
                         "description": (
                             "back_left/back_right reverse with steering bias. "
@@ -246,9 +251,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "preferred_side": {
                         "type": "string",
                         "enum": ["left", "right"],
-                        "description": (
-                            "Which way to arc on the first forward step."
-                        ),
+                        "description": ("Which way to arc on the first forward step."),
                     },
                 },
                 "required": ["preferred_side"],
@@ -346,9 +349,7 @@ class ToolResult:
 # ---------------------------------------------------------------------------
 
 
-def _run_script(
-    name: str, argv: list[str], timeout: float
-) -> ToolResult:
+def _run_script(name: str, argv: list[str], timeout: float) -> ToolResult:
     """Run a brain/*.py script as a subprocess and capture its output."""
     cmd = [PYTHON_BIN, *argv]
     started = time.time()
@@ -403,7 +404,12 @@ def _build_distance(_args: dict[str, Any]) -> list[str]:
 def _build_pan_tilt(args: dict[str, Any]) -> list[str]:
     action = args.get("action")
     if action not in {
-        "pan_left", "pan_right", "tilt_up", "tilt_down", "center", "angles",
+        "pan_left",
+        "pan_right",
+        "tilt_up",
+        "tilt_down",
+        "center",
+        "angles",
     }:
         raise ValueError(f"invalid pan_tilt action: {action!r}")
 
@@ -427,8 +433,13 @@ def _build_look_around(args: dict[str, Any]) -> list[str]:
 def _build_move(args: dict[str, Any]) -> list[str]:
     direction = args.get("direction")
     if direction not in {
-        "forward", "back", "left", "right", "stop",
-        "back_left", "back_right",
+        "forward",
+        "back",
+        "left",
+        "right",
+        "stop",
+        "back_left",
+        "back_right",
     }:
         raise ValueError(f"invalid move direction: {direction!r}")
     cmd = [str(BRAIN_DIR / "move.py"), direction]
@@ -582,8 +593,12 @@ def _try_direct(name: str, args: dict[str, Any], hw: Any) -> ToolResult | None:
         return execute_start_moving(hw, args)
     if name == "stop_moving" and hw.movement_manager is not None:
         return execute_stop_moving(hw, args)
-    if name in {"reverse_steer", "three_point_turn", "align_to_path"} and hw.motor is not None:
+    if (
+        name in {"reverse_steer", "three_point_turn", "align_to_path"}
+        and hw.motor is not None
+    ):
         from brain.hardware_tools import execute_maneuver
+
         return execute_maneuver(name, hw, args)
     return None  # peripheral missing — fall back to subprocess
 
@@ -647,21 +662,23 @@ def parse_tool_calls_from_text(text: str) -> list[dict[str, Any]]:
 # Gemini's Schema is a strict subset of JSON Schema / OpenAPI. These fields
 # are valid in OpenAI tool schemas but rejected by the Gemini proto. They
 # are validation hints only — stripping them does not change tool behavior.
-_GEMINI_UNSUPPORTED_SCHEMA_KEYS: frozenset[str] = frozenset({
-    "minimum",
-    "maximum",
-    "exclusiveMinimum",
-    "exclusiveMaximum",
-    "multipleOf",
-    "minLength",
-    "maxLength",
-    "pattern",
-    "minItems",
-    "maxItems",
-    "uniqueItems",
-    "additionalProperties",
-    "default",
-})
+_GEMINI_UNSUPPORTED_SCHEMA_KEYS: frozenset[str] = frozenset(
+    {
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "multipleOf",
+        "minLength",
+        "maxLength",
+        "pattern",
+        "minItems",
+        "maxItems",
+        "uniqueItems",
+        "additionalProperties",
+        "default",
+    }
+)
 
 
 def _scrub_for_gemini(node: Any) -> Any:

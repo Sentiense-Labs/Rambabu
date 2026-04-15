@@ -43,7 +43,7 @@ SPEED_CM_PER_S_AT_80: float = 67.0
 DEG_PER_SEC_OF_ARC: float = 31.0
 
 # Single-arc U-turn (preferred when space allows).
-UTURN_SINGLE_ARC_S: float = 5.8           # ≈ 180° at the calibrated rate
+UTURN_SINGLE_ARC_S: float = 5.8  # ≈ 180° at the calibrated rate
 # Front clearance needed: the rover's nose advances at most ~radius (65 cm)
 # during the arc before the curve sweeps it away. Add a 20 cm bumper.
 UTURN_FRONT_CLEARANCE_CM: float = 85.0
@@ -56,15 +56,15 @@ UTURN_SIDE_CLEARANCE_CM: float = 140.0
 # The 1.5 s reverse is intentionally above the global REVERSE_HARD_CAP_S of
 # 0.5 s — safe here because the iterative U-turn verifies front clearance
 # before starting and the reverses stay within the verified workspace.
-TPT_ARC_PER_LEG_S: float = 1.0          # forward arc per leg
-TPT_REVERSE_PER_LEG_S: float = 1.5      # reverse arc per leg (overrides cap)
-TPT_FINAL_STRAIGHT_S: float = 0.5       # final forward straighten
+TPT_ARC_PER_LEG_S: float = 1.0  # forward arc per leg
+TPT_REVERSE_PER_LEG_S: float = 1.5  # reverse arc per leg (overrides cap)
+TPT_FINAL_STRAIGHT_S: float = 0.5  # final forward straighten
 # 6 cycles × 1 s arc was empirically a full 180° when paired with 1.5 s
 # reverses (much of the rotation comes from the rear-swinging reverses,
 # not just the forward arc). Keeping the budget at 6 s matches that.
 TPT_TARGET_ARC_TIME_S: float = 6.0
-TPT_MAX_LEGS: int = 8                   # safety cap (3-point → 15-point)
-TPT_INTRA_STEP_PAUSE_S: float = 0.1     # brief settle between sub-steps
+TPT_MAX_LEGS: int = 8  # safety cap (3-point → 15-point)
+TPT_INTRA_STEP_PAUSE_S: float = 0.1  # brief settle between sub-steps
 
 DISENGAGE_BACK_S: float = 0.5
 DISENGAGE_THRESHOLD_CM: float = 60.0  # below this, we are too close for a forward arc
@@ -153,7 +153,10 @@ def _drive_forward_arc_sonar_aware(
 
 
 def _drive_reverse_arc(
-    hw: HardwareContext, side: str, seconds: float, max_seconds: float | None = None,
+    hw: HardwareContext,
+    side: str,
+    seconds: float,
+    max_seconds: float | None = None,
 ) -> None:
     """Steer to `side` and reverse for `seconds`.
 
@@ -200,7 +203,10 @@ def reverse_steer(
         back_right → front swings LEFT,  rear goes RIGHT
     """
     if steer_direction not in ("left", "right"):
-        return {"status": "error", "message": f"invalid steer_direction: {steer_direction!r}"}
+        return {
+            "status": "error",
+            "message": f"invalid steer_direction: {steer_direction!r}",
+        }
 
     seconds = max(0.05, min(float(seconds), REVERSE_HARD_CAP_S))
 
@@ -244,7 +250,10 @@ def align_to_path(
     correction_strength: light=0.2s, medium=0.4s, strong=0.6s.
     """
     if drift_direction not in ("left", "right"):
-        return {"status": "error", "message": f"invalid drift_direction: {drift_direction!r}"}
+        return {
+            "status": "error",
+            "message": f"invalid drift_direction: {drift_direction!r}",
+        }
 
     seconds = _CORRECTION_SECONDS.get(correction_strength)
     if seconds is None:
@@ -326,7 +335,10 @@ def three_point_turn(
     preferred_side: which way the front swings on the first arc.
     """
     if preferred_side not in ("left", "right"):
-        return {"status": "error", "message": f"invalid preferred_side: {preferred_side!r}"}
+        return {
+            "status": "error",
+            "message": f"invalid preferred_side: {preferred_side!r}",
+        }
 
     _stop_motion(hw)
 
@@ -344,11 +356,14 @@ def three_point_turn(
         hw.motor.back(DRIVE_SPEED)
         time.sleep(DISENGAGE_BACK_S)
         hw.motor.stop()
-        steps.append({
-            "step": 0, "action": "disengage_back",
-            "duration_s": DISENGAGE_BACK_S,
-            "front_distance_cm": round(front_cm, 1),
-        })
+        steps.append(
+            {
+                "step": 0,
+                "action": "disengage_back",
+                "duration_s": DISENGAGE_BACK_S,
+                "front_distance_cm": round(front_cm, 1),
+            }
+        )
         front_cm = _front_distance_cm(hw)
 
     # Branch on space available.
@@ -373,13 +388,15 @@ def _uturn_single_arc(
         arc_actual = _drive_forward_arc_sonar_aware(
             hw, preferred_side, UTURN_SINGLE_ARC_S
         )
-        steps.append({
-            "leg": 1,
-            "action": "forward_arc",
-            "side": preferred_side,
-            "duration_s": round(arc_actual, 2),
-            "front_distance_cm": round(_front_distance_cm(hw) or -1, 1),
-        })
+        steps.append(
+            {
+                "leg": 1,
+                "action": "forward_arc",
+                "side": preferred_side,
+                "duration_s": round(arc_actual, 2),
+                "front_distance_cm": round(_front_distance_cm(hw) or -1, 1),
+            }
+        )
     except Exception as exc:
         _stop_motion(hw)
         return {"status": "error", "message": str(exc), "completed_steps": steps}
@@ -428,13 +445,16 @@ def _uturn_iterative(
                 hw, preferred_side, TPT_ARC_PER_LEG_S
             )
             cumulative_arc_s += arc_actual
-            steps.append({
-                "leg": leg, "action": "forward_arc",
-                "side": preferred_side,
-                "duration_s": round(arc_actual, 2),
-                "cumulative_arc_s": round(cumulative_arc_s, 2),
-                "front_distance_cm": round(_front_distance_cm(hw) or -1, 1),
-            })
+            steps.append(
+                {
+                    "leg": leg,
+                    "action": "forward_arc",
+                    "side": preferred_side,
+                    "duration_s": round(arc_actual, 2),
+                    "cumulative_arc_s": round(cumulative_arc_s, 2),
+                    "front_distance_cm": round(_front_distance_cm(hw) or -1, 1),
+                }
+            )
 
             if cumulative_arc_s >= TPT_TARGET_ARC_TIME_S:
                 logger.info(
@@ -447,24 +467,32 @@ def _uturn_iterative(
             # Use the longer reverse cap — workspace clearance was verified
             # at maneuver entry, the reverses stay well within that bubble.
             _drive_reverse_arc(
-                hw, opposite, TPT_REVERSE_PER_LEG_S,
+                hw,
+                opposite,
+                TPT_REVERSE_PER_LEG_S,
                 max_seconds=TPT_REVERSE_PER_LEG_S,
             )
-            steps.append({
-                "leg": leg, "action": "reverse_arc", "side": opposite,
-                "duration_s": TPT_REVERSE_PER_LEG_S,
-                "note": "rear swung " + ("right" if opposite == "left" else "left"),
-            })
+            steps.append(
+                {
+                    "leg": leg,
+                    "action": "reverse_arc",
+                    "side": opposite,
+                    "duration_s": TPT_REVERSE_PER_LEG_S,
+                    "note": "rear swung " + ("right" if opposite == "left" else "left"),
+                }
+            )
             time.sleep(TPT_INTRA_STEP_PAUSE_S)
 
         if TPT_FINAL_STRAIGHT_S > 0:
             hw.motor.front(DRIVE_SPEED)
             time.sleep(TPT_FINAL_STRAIGHT_S)
             hw.motor.stop()
-            steps.append({
-                "action": "forward_straight",
-                "duration_s": TPT_FINAL_STRAIGHT_S,
-            })
+            steps.append(
+                {
+                    "action": "forward_straight",
+                    "duration_s": TPT_FINAL_STRAIGHT_S,
+                }
+            )
 
     except Exception as exc:
         _stop_motion(hw)

@@ -197,26 +197,38 @@ class PanTilt:
         return {"status": "ok", "action": "pan_right_start"}
 
     def up_left_start(self) -> dict:
-        self._start_movement(-_STEP_DEG * config.PAN_DIRECTION, _STEP_DEG * config.TILT_DIRECTION)
+        self._start_movement(
+            -_STEP_DEG * config.PAN_DIRECTION, _STEP_DEG * config.TILT_DIRECTION
+        )
         return {"status": "ok", "action": "up_left_start"}
 
     def up_right_start(self) -> dict:
-        self._start_movement(_STEP_DEG * config.PAN_DIRECTION, _STEP_DEG * config.TILT_DIRECTION)
+        self._start_movement(
+            _STEP_DEG * config.PAN_DIRECTION, _STEP_DEG * config.TILT_DIRECTION
+        )
         return {"status": "ok", "action": "up_right_start"}
 
     def down_left_start(self) -> dict:
-        self._start_movement(-_STEP_DEG * config.PAN_DIRECTION, -_STEP_DEG * config.TILT_DIRECTION)
+        self._start_movement(
+            -_STEP_DEG * config.PAN_DIRECTION, -_STEP_DEG * config.TILT_DIRECTION
+        )
         return {"status": "ok", "action": "down_left_start"}
 
     def down_right_start(self) -> dict:
-        self._start_movement(_STEP_DEG * config.PAN_DIRECTION, -_STEP_DEG * config.TILT_DIRECTION)
+        self._start_movement(
+            _STEP_DEG * config.PAN_DIRECTION, -_STEP_DEG * config.TILT_DIRECTION
+        )
         return {"status": "ok", "action": "down_right_start"}
 
     def servo_stop(self) -> dict:
         self._stop_current_movement()
         log_info(f"Servo stopped — pan={self.pan_angle}° tilt={self.tilt_angle}°")
-        return {"status": "ok", "action": "servo_stop",
-                "pan": self.pan_angle, "tilt": self.tilt_angle}
+        return {
+            "status": "ok",
+            "action": "servo_stop",
+            "pan": self.pan_angle,
+            "tilt": self.tilt_angle,
+        }
 
     # ── Utility ───────────────────────────────────────────────────────────
 

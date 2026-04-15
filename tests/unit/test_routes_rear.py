@@ -1,4 +1,5 @@
 """Unit tests for rear obstacle guard on POST /motor/back and sensor endpoints."""
+
 import sys
 from unittest.mock import MagicMock
 

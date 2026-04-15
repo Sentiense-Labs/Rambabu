@@ -52,7 +52,7 @@ def main() -> None:
         print(f"zone: {zone}")
     except Exception as exc:
         logger.error(f"Sonar read failed: {exc}")
-        print(f"status: error")
+        print("status: error")
         print(f"message: {exc}")
         sys.exit(1)
     finally:

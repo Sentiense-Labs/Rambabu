@@ -76,6 +76,7 @@ def _cleanup_gpio() -> None:
 # Drive: forward / back
 # ---------------------------------------------------------------------------
 
+
 def drive_forward(speed: int = config.DEFAULT_SPEED, duration: float = 1.5) -> None:
     """Run rear motor forward at speed% for duration seconds."""
     duty = min(max(speed, 0), 100)
@@ -112,6 +113,7 @@ def drive_speed_ramp(duration_per_step: float = 1.0) -> None:
 # ---------------------------------------------------------------------------
 # Steering: left hold / right hold / center
 # ---------------------------------------------------------------------------
+
 
 def _steer_center() -> None:
     """Center steering with dead time."""
@@ -150,6 +152,7 @@ def steer_right_hold(duration: float = 1.0) -> None:
 # Pytest tests
 # ---------------------------------------------------------------------------
 
+
 class TestDrive:
     """Rear motor forward and backward."""
 
@@ -168,7 +171,9 @@ class TestDrive:
         drive_back(config.DEFAULT_SPEED, duration=1.5)
 
     def test_speed_ramp(self) -> None:
-        print(f"\n  Ramp: {config.MIN_SPEED} → {config.DEFAULT_SPEED} → {config.MAX_SPEED}")
+        print(
+            f"\n  Ramp: {config.MIN_SPEED} → {config.DEFAULT_SPEED} → {config.MAX_SPEED}"
+        )
         drive_speed_ramp(duration_per_step=1.0)
 
 
@@ -204,10 +209,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Motor hardware test")
     parser.add_argument("--drive-only", action="store_true", help="Forward/back only")
     parser.add_argument("--steer-only", action="store_true", help="Steering only")
-    parser.add_argument("--speed", type=int, default=config.DEFAULT_SPEED,
-                        help=f"Drive speed 0-100 (default: {config.DEFAULT_SPEED})")
-    parser.add_argument("--duration", type=float, default=1.5,
-                        help="Seconds per drive test (default: 1.5)")
+    parser.add_argument(
+        "--speed",
+        type=int,
+        default=config.DEFAULT_SPEED,
+        help=f"Drive speed 0-100 (default: {config.DEFAULT_SPEED})",
+    )
+    parser.add_argument(
+        "--duration",
+        type=float,
+        default=1.5,
+        help="Seconds per drive test (default: 1.5)",
+    )
     args = parser.parse_args()
 
     do_drive = not args.steer_only

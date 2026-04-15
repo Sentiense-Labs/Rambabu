@@ -3,14 +3,16 @@
 Captures a still image from the PiCamera, saves it to the workspace,
 and prints the file path to stdout.
 """
+
 import sys
 import os
 import time
 from picamera2 import Picamera2
 
 # Add the project root to the Python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, project_root)
+
 
 def capture_image():
     output_path = ""
@@ -20,7 +22,7 @@ def capture_image():
         config = picam2.create_still_configuration(main={"size": (1920, 1080)})
         picam2.configure(config)
         picam2.start()
-        time.sleep(2) # Camera warm-up
+        time.sleep(2)  # Camera warm-up
 
         workspace_dir = "/home/rambabu/.openclaw/workspace/captures"
         os.makedirs(workspace_dir, exist_ok=True)
@@ -33,11 +35,12 @@ def capture_image():
 
     except Exception as e:
         print(f"ERROR: An unexpected error occurred: {e}", file=sys.stderr)
-        
+
     finally:
         if picam2 and picam2.started:
             picam2.stop()
             picam2.close()
+
 
 if __name__ == "__main__":
     capture_image()

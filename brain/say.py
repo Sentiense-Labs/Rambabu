@@ -20,8 +20,8 @@ from dotenv import load_dotenv
 sys.path.insert(0, "/home/rambabu/rambabu_rc")
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-from lib.speaker import Speaker
-from utils.elevenlabs import synthesize
+from lib.speaker import Speaker  # noqa: E402
+from utils.elevenlabs import synthesize  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,14 +52,14 @@ def main() -> None:
         mp3 = synthesize(text)
         if mp3 is not None:
             speaker.play_mp3_bytes(mp3)
-            print(f"status: ok")
-            print(f"engine: elevenlabs")
+            print("status: ok")
+            print("engine: elevenlabs")
             print(f"bytes: {len(mp3)}")
         else:
             logger.warning("ElevenLabs failed — using pyttsx3 fallback")
             speaker.speak_sync(text)
-            print(f"status: ok")
-            print(f"engine: pyttsx3")
+            print("status: ok")
+            print("engine: pyttsx3")
     except Exception as exc:
         logger.exception(f"Speech failed: {exc}")
         print("status: error")

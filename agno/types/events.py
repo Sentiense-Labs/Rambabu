@@ -12,7 +12,6 @@ from typing import Any
 
 from agno.lib.prompts import TOOL_ADDENDUM, COMPRESS_PROMPT
 
-
 # Re-export with underscore prefix for backward compatibility
 _TOOL_ADDENDUM = TOOL_ADDENDUM
 _COMPRESS_PROMPT = COMPRESS_PROMPT

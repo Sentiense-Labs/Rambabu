@@ -29,8 +29,6 @@ from brain.sonar_guard import (
     SonarGuard,
     ZONE_CLOSE,
     ZONE_CRITICAL,
-    ZONE_MEDIUM,
-    ZONE_CLEAR,
 )
 
 logger = logging.getLogger("brain.movement_manager")
@@ -254,9 +252,7 @@ class MovementManager:
         """Atomic state read — useful for emitting to the brain."""
         with self._lock:
             elapsed = (
-                time.time() - self._started_at
-                if self._started_at is not None
-                else 0.0
+                time.time() - self._started_at if self._started_at is not None else 0.0
             )
             scale = (self._speed / _BASE_SPEED_DUTY) if self._speed else 0.0
             return {
@@ -264,7 +260,9 @@ class MovementManager:
                 "direction": self._direction,
                 "speed": self._speed,
                 "elapsed_s": round(elapsed, 2),
-                "estimated_distance_cm": round(elapsed * _BASE_SPEED_CM_PER_S * scale, 1),
+                "estimated_distance_cm": round(
+                    elapsed * _BASE_SPEED_CM_PER_S * scale, 1
+                ),
             }
 
     # ── internal ─────────────────────────────────────────────────────────
@@ -295,15 +293,19 @@ class MovementManager:
             samples: list[float] = []
             for _ in range(_PREFLIGHT_BURST_COUNT):
                 try:
-                    samples.append(float(self._guard._ultrasonic.get_min_distance()))  # noqa: SLF001
+                    samples.append(
+                        float(self._guard._ultrasonic.get_min_distance())
+                    )  # noqa: SLF001
                 except AttributeError:
-                    samples.append(float(self._guard._ultrasonic.get_distance()))  # noqa: SLF001
+                    samples.append(
+                        float(self._guard._ultrasonic.get_distance())
+                    )  # noqa: SLF001
                 time.sleep(_PREFLIGHT_BURST_SPACING_S)
             burst_min = min(samples) if samples else 999.0
             burst_zone = (
-                ZONE_CRITICAL if burst_min < 25.0
-                else ZONE_CLOSE if burst_min < 70.0
-                else None
+                ZONE_CRITICAL
+                if burst_min < 25.0
+                else ZONE_CLOSE if burst_min < 70.0 else None
             )
             if burst_zone is not None:
                 return {
@@ -348,17 +350,23 @@ class MovementManager:
         Without this, motor.stop() just zeroes PWM and the rover coasts.
         At speed=80 that's ~30cm of overshoot — enough to turn a close-zone
         auto-stop into a critical-zone collision.
+
+        Skips the reverse pulse if the rear obstacle sensor confirms blockage —
+        braking into a confirmed rear obstacle is worse than coasting forward.
         """
-        try:
-            self._motor.back(_BRAKE_DUTY)
-            time.sleep(_BRAKE_DURATION_S)
-        except Exception as exc:
-            logger.warning(f"MovementManager: brake pulse failed — {exc}")
-        finally:
+        rear_check = getattr(self._motor, "_rear_obstacle_check", None)
+        rear_blocked = rear_check is not None and rear_check()
+
+        if not rear_blocked:
             try:
-                self._motor.stop()
+                self._motor.back(_BRAKE_DUTY)
+                time.sleep(_BRAKE_DURATION_S)
             except Exception as exc:
-                logger.error(f"MovementManager: post-brake stop failed — {exc}")
+                logger.warning(f"MovementManager: brake pulse failed — {exc}")
+        try:
+            self._motor.stop()
+        except Exception as exc:
+            logger.error(f"MovementManager: post-brake stop failed — {exc}")
 
     def _handle_zone_change(
         self, old_zone: str, new_zone: str, distance: float

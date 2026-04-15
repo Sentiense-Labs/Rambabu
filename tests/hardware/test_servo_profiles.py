@@ -34,13 +34,14 @@ _PRESCALE = 0xFE
 _LED0_ON_L = 0x06
 I2C_BUS = 1
 
-_MIN_TICKS = 102   # 0.5ms → 0°
-_MAX_TICKS = 512   # 2.5ms → 180°
+_MIN_TICKS = 102  # 0.5ms → 0°
+_MAX_TICKS = 512  # 2.5ms → 180°
 
 
 # ---------------------------------------------------------------------------
 # PCA9685 low-level
 # ---------------------------------------------------------------------------
+
 
 def _init_pca9685(bus: SMBus) -> None:
     addr = config.PCA9685_I2C_ADDRESS
@@ -68,7 +69,7 @@ def _set_angle(bus: SMBus, ch: int, angle: int) -> None:
             bus.write_byte_data(addr, reg + 3, (ticks >> 8) & 0xFF)
             return
         except OSError:
-            time.sleep(0.01 * (2 ** attempt))
+            time.sleep(0.01 * (2**attempt))
 
 
 def _kill(bus: SMBus, ch: int) -> None:
@@ -94,6 +95,7 @@ def _kill_all(bus: SMBus) -> None:
 # Movement profiles
 # ---------------------------------------------------------------------------
 
+
 def _profile_header(num: int, name: str, description: str) -> None:
     print(f"\n{'='*60}")
     print(f"  PROFILE {num}: {name}")
@@ -107,11 +109,13 @@ def _make_range(start: int, end: int, step: int) -> range:
     return range(start, end - 1, -step)
 
 
-def profile_1_smooth_2deg(bus: SMBus, ch: int, label: str,
-                          lo: int, center: int, hi: int) -> None:
+def profile_1_smooth_2deg(
+    bus: SMBus, ch: int, label: str, lo: int, center: int, hi: int
+) -> None:
     """Continuous PWM, 2° steps, 80ms — smooth and slow."""
-    _profile_header(1, "SMOOTH (2°, 80ms)",
-                    "Tiny steps for smoothest motion. PWM on, kill at end.")
+    _profile_header(
+        1, "SMOOTH (2°, 80ms)", "Tiny steps for smoothest motion. PWM on, kill at end."
+    )
 
     _set_angle(bus, ch, center)
     time.sleep(0.5)
@@ -127,11 +131,13 @@ def profile_1_smooth_2deg(bus: SMBus, ch: int, label: str,
     time.sleep(1)
 
 
-def profile_2_smooth_3deg(bus: SMBus, ch: int, label: str,
-                          lo: int, center: int, hi: int) -> None:
+def profile_2_smooth_3deg(
+    bus: SMBus, ch: int, label: str, lo: int, center: int, hi: int
+) -> None:
     """Continuous PWM, 3° steps, 100ms — smooth and steady."""
-    _profile_header(2, "SMOOTH (3°, 100ms)",
-                    "Small steps, generous delay. PWM on, kill at end.")
+    _profile_header(
+        2, "SMOOTH (3°, 100ms)", "Small steps, generous delay. PWM on, kill at end."
+    )
 
     _set_angle(bus, ch, center)
     time.sleep(0.5)
@@ -147,11 +153,13 @@ def profile_2_smooth_3deg(bus: SMBus, ch: int, label: str,
     time.sleep(1)
 
 
-def profile_3_steady_5deg(bus: SMBus, ch: int, label: str,
-                          lo: int, center: int, hi: int) -> None:
+def profile_3_steady_5deg(
+    bus: SMBus, ch: int, label: str, lo: int, center: int, hi: int
+) -> None:
     """Continuous PWM, 5° steps, 120ms — visible steps but steady."""
-    _profile_header(3, "STEADY (5°, 120ms)",
-                    "5° steps with long settle. PWM on, kill at end.")
+    _profile_header(
+        3, "STEADY (5°, 120ms)", "5° steps with long settle. PWM on, kill at end."
+    )
 
     _set_angle(bus, ch, center)
     time.sleep(0.5)
@@ -167,11 +175,13 @@ def profile_3_steady_5deg(bus: SMBus, ch: int, label: str,
     time.sleep(1)
 
 
-def profile_4_steady_5deg_slow(bus: SMBus, ch: int, label: str,
-                               lo: int, center: int, hi: int) -> None:
+def profile_4_steady_5deg_slow(
+    bus: SMBus, ch: int, label: str, lo: int, center: int, hi: int
+) -> None:
     """Continuous PWM, 5° steps, 200ms — deliberate, camera-friendly."""
-    _profile_header(4, "STEADY SLOW (5°, 200ms)",
-                    "5° steps, 200ms between. Very deliberate motion.")
+    _profile_header(
+        4, "STEADY SLOW (5°, 200ms)", "5° steps, 200ms between. Very deliberate motion."
+    )
 
     _set_angle(bus, ch, center)
     time.sleep(0.5)
@@ -187,11 +197,15 @@ def profile_4_steady_5deg_slow(bus: SMBus, ch: int, label: str,
     time.sleep(1)
 
 
-def profile_5_burst_and_kill(bus: SMBus, ch: int, label: str,
-                             lo: int, center: int, hi: int) -> None:
+def profile_5_burst_and_kill(
+    bus: SMBus, ch: int, label: str, lo: int, center: int, hi: int
+) -> None:
     """Burst: 15° continuous at 80ms, then kill between bursts."""
-    _profile_header(5, "BURST (15° continuous, kill between)",
-                    "PWM on for 15° at 80ms per step, kill, next burst.")
+    _profile_header(
+        5,
+        "BURST (15° continuous, kill between)",
+        "PWM on for 15° at 80ms per step, kill, next burst.",
+    )
 
     _set_angle(bus, ch, center)
     time.sleep(0.3)
@@ -201,7 +215,7 @@ def profile_5_burst_and_kill(bus: SMBus, ch: int, label: str,
         print(f"  {label}: {start}° → {end}°")
         angles = list(_make_range(start, end, 3))
         for i in range(0, len(angles), 5):  # 5 steps of 3° = 15° burst
-            burst = angles[i:i + 5]
+            burst = angles[i : i + 5]
             for angle in burst:
                 _set_angle(bus, ch, angle)
                 time.sleep(0.08)
@@ -212,11 +226,15 @@ def profile_5_burst_and_kill(bus: SMBus, ch: int, label: str,
     time.sleep(1)
 
 
-def profile_6_move_and_kill(bus: SMBus, ch: int, label: str,
-                            lo: int, center: int, hi: int) -> None:
+def profile_6_move_and_kill(
+    bus: SMBus, ch: int, label: str, lo: int, center: int, hi: int
+) -> None:
     """Move-and-kill per step — 5° steps, 200ms settle, kill each."""
-    _profile_header(6, "MOVE-AND-KILL (5°, 200ms settle)",
-                    "Each step: pulse → 200ms → kill. No jitter, slowest.")
+    _profile_header(
+        6,
+        "MOVE-AND-KILL (5°, 200ms settle)",
+        "Each step: pulse → 200ms → kill. No jitter, slowest.",
+    )
 
     _set_angle(bus, ch, center)
     time.sleep(0.3)
@@ -247,9 +265,16 @@ ALL_PROFILES = [
 # Runner
 # ---------------------------------------------------------------------------
 
-def run_profiles(bus: SMBus, ch: int, label: str,
-                 lo: int, center: int, hi: int,
-                 profile_num: int | None = None) -> None:
+
+def run_profiles(
+    bus: SMBus,
+    ch: int,
+    label: str,
+    lo: int,
+    center: int,
+    hi: int,
+    profile_num: int | None = None,
+) -> None:
     profiles = ALL_PROFILES
     if profile_num is not None:
         idx = profile_num - 1
@@ -274,8 +299,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Servo movement profile comparison")
     parser.add_argument("--pan-only", action="store_true", help="Test pan only")
     parser.add_argument("--tilt-only", action="store_true", help="Test tilt only")
-    parser.add_argument("--profile", type=int, default=None,
-                        help="Run specific profile (1-6)")
+    parser.add_argument(
+        "--profile", type=int, default=None, help="Run specific profile (1-6)"
+    )
     args = parser.parse_args()
 
     do_pan = not args.tilt_only
@@ -298,20 +324,36 @@ if __name__ == "__main__":
             if do_tilt:
                 print(f"\n{'#'*60}")
                 print(f"  TILT SERVO (ch {config.SERVO_TILT_CHANNEL})")
-                print(f"  Range: {config.TILT_MIN}° – {config.TILT_MAX}°  Center: {config.TILT_CENTER}°")
+                print(
+                    f"  Range: {config.TILT_MIN}° – {config.TILT_MAX}°  Center: {config.TILT_CENTER}°"
+                )
                 print(f"{'#'*60}")
-                run_profiles(bus, config.SERVO_TILT_CHANNEL, "TILT",
-                             config.TILT_MIN, config.TILT_CENTER, config.TILT_MAX,
-                             args.profile)
+                run_profiles(
+                    bus,
+                    config.SERVO_TILT_CHANNEL,
+                    "TILT",
+                    config.TILT_MIN,
+                    config.TILT_CENTER,
+                    config.TILT_MAX,
+                    args.profile,
+                )
 
             if do_pan:
                 print(f"\n{'#'*60}")
                 print(f"  PAN SERVO (ch {config.SERVO_PAN_CHANNEL})")
-                print(f"  Range: {config.PAN_MIN}° – {config.PAN_MAX}°  Center: {config.PAN_CENTER}°")
+                print(
+                    f"  Range: {config.PAN_MIN}° – {config.PAN_MAX}°  Center: {config.PAN_CENTER}°"
+                )
                 print(f"{'#'*60}")
-                run_profiles(bus, config.SERVO_PAN_CHANNEL, "PAN",
-                             config.PAN_MIN, config.PAN_CENTER, config.PAN_MAX,
-                             args.profile)
+                run_profiles(
+                    bus,
+                    config.SERVO_PAN_CHANNEL,
+                    "PAN",
+                    config.PAN_MIN,
+                    config.PAN_CENTER,
+                    config.PAN_MAX,
+                    args.profile,
+                )
 
         except KeyboardInterrupt:
             print("\n\n  Interrupted!")

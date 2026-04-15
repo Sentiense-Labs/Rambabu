@@ -97,7 +97,9 @@ def run_app(
         speaker: Speaker instance
         mode_manager: ModeManager instance
     """
-    app = create_app(motor, camera, ultrasonic, rear_ultrasonic, pan_tilt, speaker, mode_manager)
+    app = create_app(
+        motor, camera, ultrasonic, rear_ultrasonic, pan_tilt, speaker, mode_manager
+    )
 
     log_info(f"Starting Flask server on {config.FLASK_HOST}:{config.FLASK_PORT}")
 

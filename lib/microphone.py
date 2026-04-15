@@ -106,10 +106,14 @@ class Microphone:
         # 1.5s silence window at 1280 samples/chunk @ 16kHz
         max_silent = int(config.MIC_SAMPLE_RATE / config.MIC_CHUNK_SIZE * 1.5)
         max_frames = int(
-            config.MIC_SAMPLE_RATE / config.MIC_CHUNK_SIZE * config.MIC_PHRASE_TIME_LIMIT
+            config.MIC_SAMPLE_RATE
+            / config.MIC_CHUNK_SIZE
+            * config.MIC_PHRASE_TIME_LIMIT
         )
         speaking = False
-        energy_threshold = 300  # lower for 16kHz (fewer total samples per chunk vs 44100)
+        energy_threshold = (
+            300  # lower for 16kHz (fewer total samples per chunk vs 44100)
+        )
 
         for _ in range(max_frames):
             if not self._running:
@@ -173,7 +177,9 @@ class Microphone:
         Captures at 16kHz. Each read() returns exactly 1280 samples (80ms),
         which is exactly one OpenWakeWord inference frame — no resampling needed.
         """
-        log_info("Microphone: Listening loop started (two-stage pipeline, 16kHz native)")
+        log_info(
+            "Microphone: Listening loop started (two-stage pipeline, 16kHz native)"
+        )
 
         if not self._wakeword_model:
             log_error("Microphone: No wake word model — cannot start listening")
@@ -189,7 +195,9 @@ class Microphone:
             while self._running:
                 # ── Stage 1: Wake word detection ──
                 try:
-                    data = stream.read(config.MIC_CHUNK_SIZE, exception_on_overflow=False)
+                    data = stream.read(
+                        config.MIC_CHUNK_SIZE, exception_on_overflow=False
+                    )
                 except Exception:
                     continue
 

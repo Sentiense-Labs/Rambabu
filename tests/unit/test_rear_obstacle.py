@@ -1,4 +1,5 @@
 """Unit tests for rear obstacle latch in MotorController."""
+
 import sys
 from unittest.mock import MagicMock, patch
 

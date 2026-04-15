@@ -30,7 +30,9 @@ class TelemetryPublisher:
             distance = self._ultrasonic.get_distance()
             telemetry["distance_cm"] = round(distance, 1)
             telemetry["zone"] = self._ultrasonic.get_zone()
-            telemetry["obstacle_detected"] = distance <= config.OBSTACLE_DETECTION_DISTANCE
+            telemetry["obstacle_detected"] = (
+                distance <= config.OBSTACLE_DETECTION_DISTANCE
+            )
 
         if self._motor:
             telemetry["motor_direction"] = self._motor._direction

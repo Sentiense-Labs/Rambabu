@@ -67,8 +67,9 @@ def generate():
         # Timestamp overlay
         ts = time.strftime("%Y-%m-%d %H:%M:%S")
         h, w = frame.shape[:2]
-        cv2.putText(frame, ts, (10, h - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        cv2.putText(
+            frame, ts, (10, h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1
+        )
 
         ret, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
         if not ret:
@@ -76,9 +77,7 @@ def generate():
 
         yield (
             b"--frame\r\n"
-            b"Content-Type: image/jpeg\r\n\r\n"
-            + jpeg.tobytes()
-            + b"\r\n"
+            b"Content-Type: image/jpeg\r\n\r\n" + jpeg.tobytes() + b"\r\n"
         )
 
         time.sleep(1 / 15)  # 15 fps cap

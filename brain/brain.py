@@ -156,8 +156,7 @@ def load_system_prompt() -> str:
         observations = OBSERVATIONS_FILE.read_text(encoding="utf-8").strip()
         if observations:
             parts.append(
-                "---\n\n## What you have observed in past sessions\n\n"
-                + observations
+                "---\n\n## What you have observed in past sessions\n\n" + observations
             )
 
     return "\n\n".join(parts)
@@ -172,8 +171,7 @@ def check_gemini_key() -> None:
     """Fail fast if the Gemini API key is missing."""
     if not os.environ.get("GOOGLE_GENERATIVE_AI_API_KEY"):
         raise RuntimeError(
-            "GOOGLE_GENERATIVE_AI_API_KEY is not set. Add it to .env "
-            "and try again."
+            "GOOGLE_GENERATIVE_AI_API_KEY is not set. Add it to .env " "and try again."
         )
 
 
@@ -283,19 +281,23 @@ def _wire_event_bus(hw: HardwareContext | None) -> queue.Queue[BrainEvent] | Non
     def on_zone_change(old_zone: str, new_zone: str, distance: float) -> None:
         # MovementManager has already auto-stopped on close while moving fwd.
         kind = "OBSTACLE" if new_zone == "close" else "ZONE_CHANGE"
-        bus.put(BrainEvent(
-            kind=kind,
-            zone=new_zone,
-            distance_cm=distance,
-            extra={"old_zone": old_zone},
-        ))
+        bus.put(
+            BrainEvent(
+                kind=kind,
+                zone=new_zone,
+                distance_cm=distance,
+                extra={"old_zone": old_zone},
+            )
+        )
 
     def on_emergency_stop(distance: float) -> None:
-        bus.put(BrainEvent(
-            kind="EMERGENCY_STOP",
-            zone="critical",
-            distance_cm=distance,
-        ))
+        bus.put(
+            BrainEvent(
+                kind="EMERGENCY_STOP",
+                zone="critical",
+                distance_cm=distance,
+            )
+        )
 
     hw.movement_manager._on_zone_change = on_zone_change  # noqa: SLF001
     hw.movement_manager._on_emergency_stop = on_emergency_stop  # noqa: SLF001
@@ -338,7 +340,7 @@ def _build_safety_halt_nudge(
     return (
         f"EVENT: SAFETY_HALT reason={reason} distance={dist_str}\n"
         f"The motor is STOPPED. SonarGuard halted you because the path is "
-        f"blocked. Your last reply was: \"{last[:120]}\" — but you did not "
+        f'blocked. Your last reply was: "{last[:120]}" — but you did not '
         f"call a tool. You MUST now call a tool: look_around() to assess, "
         f"then start_moving(direction) to maneuver, or stop_moving() + a "
         f"final say() if the goal is over. Pending events: {pending_summary}"
@@ -424,9 +426,7 @@ def run_gemini_loop(
 
         function_calls, text = _split_response(response)
         if text:
-            logger.info(
-                f"assistant: {text[:400]}{'…' if len(text) > 400 else ''}"
-            )
+            logger.info(f"assistant: {text[:400]}{'…' if len(text) > 400 else ''}")
 
         # Retry on empty Gemini responses (no tools + no text) — transient
         # model failures should not be mistaken for goal completion.
@@ -437,9 +437,7 @@ def run_gemini_loop(
                     f"empty response from Gemini — retry "
                     f"{empty_response_retries}/{MAX_EMPTY_RESPONSE_RETRIES}"
                 )
-                transcript.append(
-                    f"EMPTY_RETRY: attempt={empty_response_retries}"
-                )
+                transcript.append(f"EMPTY_RETRY: attempt={empty_response_retries}")
                 try:
                     response = chat.send_message(_EMPTY_RESPONSE_NUDGE)
                 except Exception as exc:
@@ -547,7 +545,11 @@ def run_gemini_loop(
         print("\n=== stopped (iteration cap reached) ===")
 
     # Final safety net: never leave the motor running once the loop exits.
-    if hw is not None and hw.movement_manager is not None and hw.movement_manager.is_moving:
+    if (
+        hw is not None
+        and hw.movement_manager is not None
+        and hw.movement_manager.is_moving
+    ):
         hw.movement_manager.stop()
 
     # Compress session in background — does not delay the caller

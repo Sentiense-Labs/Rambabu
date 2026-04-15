@@ -6,11 +6,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-CARD = 3          # USB PnP Sound Device
-DURATION = 10     # seconds
+CARD = 3  # USB PnP Sound Device
+DURATION = 10  # seconds
 SAMPLE_RATE = 16000
 CHANNELS = 1
 FORMAT = "S16_LE"  # 16-bit signed little-endian
+
 
 def main() -> None:
     wav_path = Path(tempfile.gettempdir()) / "mic_test_recording.wav"
@@ -20,11 +21,16 @@ def main() -> None:
     result = subprocess.run(
         [
             "arecord",
-            "-D", f"hw:{CARD},0",
-            "-f", FORMAT,
-            "-r", str(SAMPLE_RATE),
-            "-c", str(CHANNELS),
-            "-d", str(DURATION),
+            "-D",
+            f"hw:{CARD},0",
+            "-f",
+            FORMAT,
+            "-r",
+            str(SAMPLE_RATE),
+            "-c",
+            str(CHANNELS),
+            "-d",
+            str(DURATION),
             str(wav_path),
         ],
         capture_output=True,

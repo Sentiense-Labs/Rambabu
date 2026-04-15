@@ -65,6 +65,7 @@ def _cleanup_gpio() -> None:
 # Drive helpers
 # ---------------------------------------------------------------------------
 
+
 def drive_forward(speed: int = config.DEFAULT_SPEED, duration: float = 1.5) -> None:
     """Run rear motor forward at speed% for duration seconds."""
     duty = min(max(speed, 0), 100)
@@ -90,6 +91,7 @@ def drive_back(speed: int = config.DEFAULT_SPEED, duration: float = 1.5) -> None
 # ---------------------------------------------------------------------------
 # Pytest tests
 # ---------------------------------------------------------------------------
+
 
 class TestForward:
     """Rear motor forward movement."""
@@ -164,7 +166,9 @@ class TestForwardReverseTransitions:
         drive_forward(config.DEFAULT_SPEED, duration=1.0)
 
     def test_speed_change_forward(self) -> None:
-        print(f"\n  Speed ramp: {config.MIN_SPEED}% → {config.DEFAULT_SPEED}% → {config.MAX_SPEED}%")
+        print(
+            f"\n  Speed ramp: {config.MIN_SPEED}% → {config.DEFAULT_SPEED}% → {config.MAX_SPEED}%"
+        )
         _pwm_bwd.ChangeDutyCycle(0)
         for speed in (config.MIN_SPEED, config.DEFAULT_SPEED, config.MAX_SPEED):
             print(f"  → {speed}%")
@@ -180,10 +184,15 @@ class TestForwardReverseTransitions:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Forward/reverse hardware test")
-    parser.add_argument("--speed", type=int, default=config.DEFAULT_SPEED,
-                        help=f"Drive speed 0-100 (default: {config.DEFAULT_SPEED})")
-    parser.add_argument("--duration", type=float, default=1.5,
-                        help="Seconds per test (default: 1.5)")
+    parser.add_argument(
+        "--speed",
+        type=int,
+        default=config.DEFAULT_SPEED,
+        help=f"Drive speed 0-100 (default: {config.DEFAULT_SPEED})",
+    )
+    parser.add_argument(
+        "--duration", type=float, default=1.5, help="Seconds per test (default: 1.5)"
+    )
     args = parser.parse_args()
 
     print("=== Forward / Reverse Hardware Test ===")

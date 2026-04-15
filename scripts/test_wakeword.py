@@ -19,9 +19,9 @@ from openwakeword.model import Model as WakeWordModel
 
 # ── Config ────────────────────────────────────────────────────────────────
 DEVICE_INDEX = 1
-SAMPLE_RATE = 16000       # 16kHz — native for OWW + Whisper, no resampling
+SAMPLE_RATE = 16000  # 16kHz — native for OWW + Whisper, no resampling
 CHANNELS = 1
-CHUNK_SIZE = 1280         # 80ms at 16kHz = exactly one OWW frame
+CHUNK_SIZE = 1280  # 80ms at 16kHz = exactly one OWW frame
 WAKEWORD_MODEL = "hey_jarvis"
 WAKEWORD_THRESHOLD = 0.5
 ENERGY_THRESHOLD = 300
@@ -95,7 +95,7 @@ def main() -> None:
         rate=SAMPLE_RATE,
         input=True,
         input_device_index=DEVICE_INDEX,
-        frames_per_buffer=CHUNK_SIZE,   # matches read size — no spin-loop on ALSA
+        frames_per_buffer=CHUNK_SIZE,  # matches read size — no spin-loop on ALSA
     )
 
     print(f'Listening for wake word: "hey jarvis"')
@@ -128,7 +128,7 @@ def main() -> None:
                 text = " ".join(seg.text for seg in segments).strip()
 
                 if text:
-                    print(f"  [{_timestamp()}] Command: \"{text}\"")
+                    print(f'  [{_timestamp()}] Command: "{text}"')
                 else:
                     print(f"  [{_timestamp()}] (empty transcription)")
 

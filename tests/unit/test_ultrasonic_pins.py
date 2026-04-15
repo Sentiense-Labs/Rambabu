@@ -1,4 +1,5 @@
 """Unit test: Ultrasonic can be instantiated with custom pin numbers."""
+
 import sys
 from unittest.mock import MagicMock, patch
 

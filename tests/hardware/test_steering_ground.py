@@ -8,10 +8,10 @@ import RPi.GPIO as GPIO
 import time
 from config import MOTOR_STEER_LEFT, MOTOR_STEER_RIGHT, MOTOR_PWM_FREQ
 
-KICK_CYCLES = 5         # Number of on/off bursts
-KICK_ON_SEC = 0.05      # 50ms full power
-KICK_OFF_SEC = 0.02     # 20ms off — lets motor bounce
-HOLD_SEC = 1.5          # Hold after kick
+KICK_CYCLES = 5  # Number of on/off bursts
+KICK_ON_SEC = 0.05  # 50ms full power
+KICK_OFF_SEC = 0.02  # 20ms off — lets motor bounce
+HOLD_SEC = 1.5  # Hold after kick
 
 
 def kick_start(pwm_active: GPIO.PWM, pwm_idle: GPIO.PWM) -> None:

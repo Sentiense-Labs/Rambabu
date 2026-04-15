@@ -19,8 +19,8 @@ MOTOR_STEER_RIGHT: Final[GPIOPin] = 14  # L9110S B-IB
 
 # Camera Pan-Tilt System - SG90 Servos via PCA9685 I2C PWM Driver
 PCA9685_I2C_ADDRESS: Final[int] = 0x40  # Default I2C address
-SERVO_PAN_CHANNEL: Final[int] = 1       # PCA9685 channel 1
-SERVO_TILT_CHANNEL: Final[int] = 0      # PCA9685 channel 0
+SERVO_PAN_CHANNEL: Final[int] = 1  # PCA9685 channel 1
+SERVO_TILT_CHANNEL: Final[int] = 0  # PCA9685 channel 0
 
 # Ultrasonic Sensor - HC-SR04 Obstacle Detection
 ULTRASONIC_TRIG: Final[GPIOPin] = 17  # Trigger pin (sends 10us pulse)
@@ -45,9 +45,9 @@ MAX_SPEED: Final[int] = 100  # Maximum PWM duty cycle
 DEFAULT_SPEED: Final[int] = 70  # Default driving speed
 
 # Steering timing (tuned via hardware test — 100% x 250ms)
-STEER_PULSE_DURATION: Final[float] = 0.25   # Seconds to hold steering pulse
-STEER_DEAD_TIME: Final[float] = 0.05        # Seconds to wait when cutting power
-STEER_SETTLE_TIME: Final[float] = 0.10      # Seconds to settle at center before reversing
+STEER_PULSE_DURATION: Final[float] = 0.25  # Seconds to hold steering pulse
+STEER_DEAD_TIME: Final[float] = 0.05  # Seconds to wait when cutting power
+STEER_SETTLE_TIME: Final[float] = 0.10  # Seconds to settle at center before reversing
 
 
 # ============================================================================
@@ -65,7 +65,7 @@ OBSTACLE_CLEAR_DISTANCE: Final[int] = 70  # cm — must be > OBSTACLE_DETECTION_
 
 # Rear obstacle safety thresholds (tighter than front — less stopping room behind)
 REAR_OBSTACLE_DETECTION_DISTANCE: Final[int] = 30  # cm — latch and stop
-REAR_OBSTACLE_CLEAR_DISTANCE: Final[int] = 45       # cm — hysteresis release
+REAR_OBSTACLE_CLEAR_DISTANCE: Final[int] = 45  # cm — hysteresis release
 
 
 # ============================================================================
@@ -88,7 +88,7 @@ TILT_OFFSET: Final[int] = 0
 # Direction multipliers — flip to -1 if servo is physically mounted in reverse
 # +1 = standard (left decreases angle, right increases angle, up increases angle)
 # -1 = reversed (flip if movement is opposite to expected)
-PAN_DIRECTION: Final[int] = -1   # Reversed — pan servo mounted mirrored
+PAN_DIRECTION: Final[int] = -1  # Reversed — pan servo mounted mirrored
 TILT_DIRECTION: Final[int] = -1  # Reversed — tilt servo mounted inverted
 
 
@@ -96,7 +96,7 @@ TILT_DIRECTION: Final[int] = -1  # Reversed — tilt servo mounted inverted
 # PWM FREQUENCIES (Hz)
 # ============================================================================
 
-MOTOR_PWM_FREQ: Final[int] = 1000   # L9110S rear motor PWM frequency
+MOTOR_PWM_FREQ: Final[int] = 1000  # L9110S rear motor PWM frequency
 SERVO_PWM_FREQ: Final[int] = 50  # SG90 servo standard frequency
 
 # Move and Kill timing
@@ -197,11 +197,11 @@ OBSTACLE_ALERT_COOLDOWN: Final[float] = 5.0  # Seconds between repeated alerts
 # MICROPHONE SETTINGS — USB PnP Sound Device
 # ============================================================================
 
-MIC_DEVICE_INDEX: Final[int] = 1        # PyAudio index (USB PnP Sound Device, ALSA card 3)
-MIC_SAMPLE_RATE: Final[int] = 16000     # 16kHz — native for OWW + Whisper
-MIC_CHANNELS: Final[int] = 1            # Mono (L/R tied to GND)
-MIC_CHUNK_SIZE: Final[int] = 1280       # 80ms at 16kHz — exactly one OWW frame
-MIC_FORMAT_WIDTH: Final[int] = 2        # 16-bit (2 bytes) for pyaudio
+MIC_DEVICE_INDEX: Final[int] = 1  # PyAudio index (USB PnP Sound Device, ALSA card 3)
+MIC_SAMPLE_RATE: Final[int] = 16000  # 16kHz — native for OWW + Whisper
+MIC_CHANNELS: Final[int] = 1  # Mono (L/R tied to GND)
+MIC_CHUNK_SIZE: Final[int] = 1280  # 80ms at 16kHz — exactly one OWW frame
+MIC_FORMAT_WIDTH: Final[int] = 2  # 16-bit (2 bytes) for pyaudio
 
 # Whisper STT (offline, on-device)
 WHISPER_MODEL_SIZE: Final[str] = "tiny"  # tiny | base | small (CPU-friendly)
@@ -211,12 +211,12 @@ WHISPER_LANGUAGE: Final[str] = "en"
 
 # Wake word detection (OpenWakeWord)
 WAKEWORD_MODEL: Final[str] = "hey_jarvis"  # Pre-built model (swap to custom later)
-WAKEWORD_THRESHOLD: Final[float] = 0.5     # Confidence threshold (0.0-1.0)
-WAKE_WORD: Final[str] = "hey jarvis"       # Display name for logging
+WAKEWORD_THRESHOLD: Final[float] = 0.5  # Confidence threshold (0.0-1.0)
+WAKE_WORD: Final[str] = "hey jarvis"  # Display name for logging
 
 # Voice activation
-MIC_LISTEN_TIMEOUT: Final[float] = 2.0       # Seconds to wait for speech start
-MIC_PHRASE_TIME_LIMIT: Final[float] = 5.0    # Max seconds per utterance
+MIC_LISTEN_TIMEOUT: Final[float] = 2.0  # Seconds to wait for speech start
+MIC_PHRASE_TIME_LIMIT: Final[float] = 5.0  # Max seconds per utterance
 
 
 # ============================================================================

@@ -84,7 +84,9 @@ try:
     print(f"TRIG → GPIO {ULTRASONIC_TRIG}")
     print(f"ECHO → GPIO {ULTRASONIC_ECHO}")
     print(f"Window: {_WINDOW_SIZE}  |  Confirm: {_CONFIRM_COUNT} consecutive medians")
-    print(f"Emergency: <{_EMERGENCY_DISTANCE}cm  |  Stop: <={OBSTACLE_DETECTION_DISTANCE}cm")
+    print(
+        f"Emergency: <{_EMERGENCY_DISTANCE}cm  |  Stop: <={OBSTACLE_DETECTION_DISTANCE}cm"
+    )
     print("=" * 60)
 
     GPIO.setup(ULTRASONIC_TRIG, GPIO.OUT)
@@ -113,10 +115,7 @@ try:
         else:
             close_streak = 0
 
-        emergency = (
-            raw <= _EMERGENCY_DISTANCE
-            and is_plausible_close(raw, old_median)
-        )
+        emergency = raw <= _EMERGENCY_DISTANCE and is_plausible_close(raw, old_median)
 
         confirmed = emergency or close_streak >= _CONFIRM_COUNT
 

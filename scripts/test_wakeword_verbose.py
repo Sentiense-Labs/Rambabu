@@ -23,7 +23,7 @@ from openwakeword.model import Model as WakeWordModel
 DEVICE_INDEX = 1
 SAMPLE_RATE = 16000
 CHANNELS = 1
-CHUNK_SIZE = 1280         # 80ms at 16kHz = one OWW frame
+CHUNK_SIZE = 1280  # 80ms at 16kHz = one OWW frame
 WAKEWORD_MODEL = "hey_jarvis"
 WAKEWORD_THRESHOLD = 0.5
 ENERGY_THRESHOLD = 300
@@ -41,7 +41,7 @@ def _energy_bar(energy: float, width: int = 40) -> str:
     filled = int(clamped * width)
     if energy > ENERGY_THRESHOLD:
         return f"\033[92m{'█' * filled}{'░' * (width - filled)}\033[0m"  # green
-    return f"\033[90m{'█' * filled}{'░' * (width - filled)}\033[0m"      # grey
+    return f"\033[90m{'█' * filled}{'░' * (width - filled)}\033[0m"  # grey
 
 
 def record_utterance_verbose(stream: pyaudio.Stream) -> bytes | None:
@@ -53,8 +53,12 @@ def record_utterance_verbose(stream: pyaudio.Stream) -> bytes | None:
     speaking = False
     chunk_count = 0
 
-    print(f"  [{_ts()}] 🎙️  Recording... (speak your command, {MAX_UTTERANCE_SEC}s max)")
-    print(f"  {'':>14} Energy threshold: {ENERGY_THRESHOLD} | Silence timeout: {MAX_SILENCE_SEC}s")
+    print(
+        f"  [{_ts()}] 🎙️  Recording... (speak your command, {MAX_UTTERANCE_SEC}s max)"
+    )
+    print(
+        f"  {'':>14} Energy threshold: {ENERGY_THRESHOLD} | Silence timeout: {MAX_SILENCE_SEC}s"
+    )
     print()
 
     for _ in range(max_frames):
@@ -71,7 +75,8 @@ def record_utterance_verbose(stream: pyaudio.Stream) -> bytes | None:
             status = "SPEECH" if energy > ENERGY_THRESHOLD else "silent"
             print(
                 f"\r  energy: {energy:6.0f} {_energy_bar(energy)} [{status}]",
-                end="", flush=True,
+                end="",
+                flush=True,
             )
 
         if energy > ENERGY_THRESHOLD:
@@ -153,11 +158,17 @@ def main() -> None:
             # Show periodic heartbeat + any notable scores
             if score > 0.1:
                 bar = "#" * int(score * 30)
-                print(f"\r  [{_ts()}] wake score: {score:.3f} {bar}", end="", flush=True)
+                print(
+                    f"\r  [{_ts()}] wake score: {score:.3f} {bar}", end="", flush=True
+                )
             elif frame_count % 75 == 0:
                 # ~6 second heartbeat
                 energy = np.abs(chunk).mean()
-                print(f"\r  [{_ts()}] listening... (energy={energy:.0f})", end="", flush=True)
+                print(
+                    f"\r  [{_ts()}] listening... (energy={energy:.0f})",
+                    end="",
+                    flush=True,
+                )
 
             if score < WAKEWORD_THRESHOLD:
                 continue
@@ -196,9 +207,11 @@ def main() -> None:
                 print(f"  ┌─────────────────────────────────────────────")
                 print(f"  │ Segments:")
                 for i, seg in enumerate(segment_list):
-                    print(f"  │   [{i}] ({seg.start:.1f}s-{seg.end:.1f}s) \"{seg.text.strip()}\"")
+                    print(
+                        f'  │   [{i}] ({seg.start:.1f}s-{seg.end:.1f}s) "{seg.text.strip()}"'
+                    )
                 print(f"  │")
-                print(f"  │ Full text: \"{text}\"")
+                print(f'  │ Full text: "{text}"')
                 print(f"  └─────────────────────────────────────────────")
             else:
                 print(f"  (empty transcription — no segments returned)")

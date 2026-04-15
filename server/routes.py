@@ -89,12 +89,16 @@ def motor_action(action):
                 log_info(f"API: /motor/back BLOCKED — {result.get('message')}")
                 dist = rear_ultrasonic.get_distance() if rear_ultrasonic else 0
                 return (
-                    jsonify({
-                        "error_code": result.get("error_code", "REAR_OBSTACLE_DETECTED"),
-                        "message": result.get("message"),
-                        "distance_cm": round(dist, 1),
-                        "stop_distance_cm": config.REAR_OBSTACLE_DETECTION_DISTANCE,
-                    }),
+                    jsonify(
+                        {
+                            "error_code": result.get(
+                                "error_code", "REAR_OBSTACLE_DETECTED"
+                            ),
+                            "message": result.get("message"),
+                            "distance_cm": round(dist, 1),
+                            "stop_distance_cm": config.REAR_OBSTACLE_DETECTION_DISTANCE,
+                        }
+                    ),
                     409,
                 )
         elif action == "left":
@@ -294,8 +298,14 @@ def get_status():
                 else False
             ),
             "rear_sensor": {
-                "distance_cm": round(rear_ultrasonic.get_distance(), 1) if rear_ultrasonic else None,
-                "obstacle_confirmed": rear_ultrasonic.is_obstacle_confirmed() if rear_ultrasonic else None,
+                "distance_cm": (
+                    round(rear_ultrasonic.get_distance(), 1)
+                    if rear_ultrasonic
+                    else None
+                ),
+                "obstacle_confirmed": (
+                    rear_ultrasonic.is_obstacle_confirmed() if rear_ultrasonic else None
+                ),
             },
             "servo_angles": (
                 pan_tilt.get_angles() if pan_tilt else {"pan": 90, "tilt": 90}
@@ -324,8 +334,14 @@ def get_distance():
         rear_data = {}
         if rear_ultrasonic:
             rear_dist = rear_ultrasonic.get_distance()
-            rear_zone = "danger" if rear_dist <= config.REAR_OBSTACLE_DETECTION_DISTANCE else (
-                "warning" if rear_dist <= config.REAR_OBSTACLE_CLEAR_DISTANCE else "safe"
+            rear_zone = (
+                "danger"
+                if rear_dist <= config.REAR_OBSTACLE_DETECTION_DISTANCE
+                else (
+                    "warning"
+                    if rear_dist <= config.REAR_OBSTACLE_CLEAR_DISTANCE
+                    else "safe"
+                )
             )
             rear_data = {
                 "distance_cm": round(rear_dist, 1),

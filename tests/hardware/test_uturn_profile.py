@@ -39,12 +39,13 @@ from lib.ultrasonic import Ultrasonic
 @dataclass(frozen=True)
 class Profile:
     """A single U-turn parameter set."""
+
     name: str
-    arc_seconds: float          # forward-arc duration per leg
-    legs: int                   # number of forward arcs
-    reverse_seconds: float      # reverse-arc duration between legs (0 = no reverse)
-    speed: int                  # motor duty cycle 0-100
-    final_straight_s: float     # forward-straight settle at end
+    arc_seconds: float  # forward-arc duration per leg
+    legs: int  # number of forward arcs
+    reverse_seconds: float  # reverse-arc duration between legs (0 = no reverse)
+    speed: int  # motor duty cycle 0-100
+    final_straight_s: float  # forward-straight settle at end
     description: str
 
 
@@ -53,63 +54,109 @@ class Profile:
 # radius, then layer in iteration.
 PROFILES: dict[str, Profile] = {
     "single-2s": Profile(
-        "single-2s", arc_seconds=2.0, legs=1, reverse_seconds=0.0,
-        speed=80, final_straight_s=0.0,
+        "single-2s",
+        arc_seconds=2.0,
+        legs=1,
+        reverse_seconds=0.0,
+        speed=80,
+        final_straight_s=0.0,
         description="One 2.0s forward arc — should produce ~120°-ish",
     ),
     "single-3s": Profile(
-        "single-3s", arc_seconds=3.0, legs=1, reverse_seconds=0.0,
-        speed=80, final_straight_s=0.0,
+        "single-3s",
+        arc_seconds=3.0,
+        legs=1,
+        reverse_seconds=0.0,
+        speed=80,
+        final_straight_s=0.0,
         description="One 3.0s forward arc — current default budget",
     ),
     "single-4s": Profile(
-        "single-4s", arc_seconds=4.0, legs=1, reverse_seconds=0.0,
-        speed=80, final_straight_s=0.0,
+        "single-4s",
+        arc_seconds=4.0,
+        legs=1,
+        reverse_seconds=0.0,
+        speed=80,
+        final_straight_s=0.0,
         description="One 4.0s forward arc — likely overshoots if turning is tight",
     ),
     "single-5s": Profile(
-        "single-5s", arc_seconds=5.0, legs=1, reverse_seconds=0.0,
-        speed=80, final_straight_s=0.0,
+        "single-5s",
+        arc_seconds=5.0,
+        legs=1,
+        reverse_seconds=0.0,
+        speed=80,
+        final_straight_s=0.0,
         description="One 5.0s forward arc — for testing wide turning radius",
     ),
     "single-6s": Profile(
-        "single-6s", arc_seconds=6.0, legs=1, reverse_seconds=0.0,
-        speed=80, final_straight_s=0.0,
+        "single-6s",
+        arc_seconds=6.0,
+        legs=1,
+        reverse_seconds=0.0,
+        speed=80,
+        final_straight_s=0.0,
         description="One 6.0s forward arc — extreme; only for very wide radius",
     ),
     "classic-3pt": Profile(
-        "classic-3pt", arc_seconds=2.0, legs=2, reverse_seconds=0.5,
-        speed=80, final_straight_s=1.0,
+        "classic-3pt",
+        arc_seconds=2.0,
+        legs=2,
+        reverse_seconds=0.5,
+        speed=80,
+        final_straight_s=1.0,
         description="2 forward arcs of 2.0s with one 0.5s reverse between",
     ),
     "tight-5pt": Profile(
-        "tight-5pt", arc_seconds=1.0, legs=3, reverse_seconds=0.5,
-        speed=80, final_straight_s=0.5,
+        "tight-5pt",
+        arc_seconds=1.0,
+        legs=3,
+        reverse_seconds=0.5,
+        speed=80,
+        final_straight_s=0.5,
         description="3 short arcs of 1.0s with 0.5s reverses — for tight spaces",
     ),
     "aggressive-2leg": Profile(
-        "aggressive-2leg", arc_seconds=2.5, legs=2, reverse_seconds=0.5,
-        speed=80, final_straight_s=1.0,
+        "aggressive-2leg",
+        arc_seconds=2.5,
+        legs=2,
+        reverse_seconds=0.5,
+        speed=80,
+        final_straight_s=1.0,
         description="2 long arcs of 2.5s + 0.5s reverse (5s total arc time)",
     ),
     "slow-deep": Profile(
-        "slow-deep", arc_seconds=4.0, legs=1, reverse_seconds=0.0,
-        speed=60, final_straight_s=0.0,
+        "slow-deep",
+        arc_seconds=4.0,
+        legs=1,
+        reverse_seconds=0.0,
+        speed=60,
+        final_straight_s=0.0,
         description="One 4.0s arc at speed 60 — same arc length as single-3s@80",
     ),
     "fast-quick": Profile(
-        "fast-quick", arc_seconds=2.0, legs=1, reverse_seconds=0.0,
-        speed=100, final_straight_s=0.0,
+        "fast-quick",
+        arc_seconds=2.0,
+        legs=1,
+        reverse_seconds=0.0,
+        speed=100,
+        final_straight_s=0.0,
         description="One 2.0s arc at full speed 100 — same arc length as single-2.5s@80",
     ),
 }
 
 
 def list_profiles() -> None:
-    print(f"\n{'name':<18} {'arc':>5} {'legs':>5} {'rev':>5} {'spd':>5} {'final':>6}  description")
+    print(
+        f"\n{'name':<18} {'arc':>5} {'legs':>5} {'rev':>5} {'spd':>5} {'final':>6}  description"
+    )
     print("─" * 110)
     for p in PROFILES.values():
-        total = p.arc_seconds * p.legs + p.reverse_seconds * max(0, p.legs - 1) + p.final_straight_s
+        total = (
+            p.arc_seconds * p.legs
+            + p.reverse_seconds * max(0, p.legs - 1)
+            + p.final_straight_s
+        )
         print(
             f"{p.name:<18} {p.arc_seconds:>5.1f} {p.legs:>5d} "
             f"{p.reverse_seconds:>5.2f} {p.speed:>5d} {p.final_straight_s:>6.1f}  "
@@ -138,7 +185,10 @@ def init_hardware() -> tuple[MotorController, Ultrasonic, SonarGuard, HardwareCo
     time.sleep(1.0)  # let SonarGuard window fill
     mm = MovementManager(motor=motor, sonar_guard=sonar)
     hw = HardwareContext(
-        motor=motor, ultrasonic=ultra, sonar_guard=sonar, movement_manager=mm,
+        motor=motor,
+        ultrasonic=ultra,
+        sonar_guard=sonar,
+        movement_manager=mm,
     )
     return motor, ultra, sonar, hw
 
@@ -172,9 +222,11 @@ def run_profile(hw: HardwareContext, profile: Profile, side: str) -> dict:
     opposite = "left" if side == "right" else "right"
 
     print(f"\n=== running profile: {profile.name} (side={side}) ===")
-    print(f"  arc={profile.arc_seconds}s × {profile.legs} legs, "
-          f"reverse={profile.reverse_seconds}s, speed={profile.speed}, "
-          f"final_straight={profile.final_straight_s}s")
+    print(
+        f"  arc={profile.arc_seconds}s × {profile.legs} legs, "
+        f"reverse={profile.reverse_seconds}s, speed={profile.speed}, "
+        f"final_straight={profile.final_straight_s}s"
+    )
 
     # Same as brain/maneuvers.py — wait for steering to physically reach
     # full lock before engaging the drive motor. Without this, short arcs
@@ -218,7 +270,9 @@ def run_profile(hw: HardwareContext, profile: Profile, side: str) -> dict:
             time.sleep(min(profile.reverse_seconds, 1.5))
             motor.stop()
             motor.steer_center()
-            print(f"  leg {leg}: reverse-arc {opposite} {profile.reverse_seconds}s done")
+            print(
+                f"  leg {leg}: reverse-arc {opposite} {profile.reverse_seconds}s done"
+            )
 
     # Final straighten
     if profile.final_straight_s > 0:
@@ -233,8 +287,10 @@ def run_profile(hw: HardwareContext, profile: Profile, side: str) -> dict:
     estimated_deg = int(cumulative_arc * 60)
 
     print(f"\n  cumulative_arc_seconds: {cumulative_arc:.2f}")
-    print(f"  open-loop estimate:     {estimated_deg}° "
-          f"(at 60°/s — adjust this after physical verification)")
+    print(
+        f"  open-loop estimate:     {estimated_deg}° "
+        f"(at 60°/s — adjust this after physical verification)"
+    )
     print(f"  total elapsed:          {elapsed:.2f}s")
 
     return {
@@ -249,15 +305,33 @@ def run_profile(hw: HardwareContext, profile: Profile, side: str) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run a single U-turn profile")
     parser.add_argument("--list", action="store_true", help="List available profiles")
-    parser.add_argument("--profile", choices=list(PROFILES), help="Named profile to run")
-    parser.add_argument("--custom", action="store_true",
-                        help="Use --arc/--legs/--reverse/--speed/--final instead of a named profile")
+    parser.add_argument(
+        "--profile", choices=list(PROFILES), help="Named profile to run"
+    )
+    parser.add_argument(
+        "--custom",
+        action="store_true",
+        help="Use --arc/--legs/--reverse/--speed/--final instead of a named profile",
+    )
     parser.add_argument("--side", choices=["left", "right"], default="right")
-    parser.add_argument("--arc", type=float, default=2.0, help="Custom: forward-arc seconds per leg")
-    parser.add_argument("--legs", type=int, default=1, help="Custom: number of forward arcs")
-    parser.add_argument("--reverse", type=float, default=0.5, help="Custom: reverse seconds (capped 0.5)")
-    parser.add_argument("--speed", type=int, default=80, help="Custom: motor speed 0-100")
-    parser.add_argument("--final", type=float, default=0.0, help="Custom: final straighten seconds")
+    parser.add_argument(
+        "--arc", type=float, default=2.0, help="Custom: forward-arc seconds per leg"
+    )
+    parser.add_argument(
+        "--legs", type=int, default=1, help="Custom: number of forward arcs"
+    )
+    parser.add_argument(
+        "--reverse",
+        type=float,
+        default=0.5,
+        help="Custom: reverse seconds (capped 0.5)",
+    )
+    parser.add_argument(
+        "--speed", type=int, default=80, help="Custom: motor speed 0-100"
+    )
+    parser.add_argument(
+        "--final", type=float, default=0.0, help="Custom: final straighten seconds"
+    )
     args = parser.parse_args()
 
     if args.list:
@@ -267,8 +341,11 @@ def main() -> int:
     if args.custom:
         profile = Profile(
             name=f"custom(arc={args.arc},legs={args.legs},rev={args.reverse},spd={args.speed},fin={args.final})",
-            arc_seconds=args.arc, legs=args.legs, reverse_seconds=args.reverse,
-            speed=args.speed, final_straight_s=args.final,
+            arc_seconds=args.arc,
+            legs=args.legs,
+            reverse_seconds=args.reverse,
+            speed=args.speed,
+            final_straight_s=args.final,
             description="custom",
         )
     elif args.profile:
@@ -283,8 +360,10 @@ def main() -> int:
         motor, ultra, sonar, hw = init_hardware()
         start_d = ultra.get_distance()
         start_safety = sonar.get_safety_distance()
-        print(f"[init] starting distance: {start_d:.1f}cm  "
-              f"safety_min={start_safety:.1f}cm  zone={sonar.get_zone()}")
+        print(
+            f"[init] starting distance: {start_d:.1f}cm  "
+            f"safety_min={start_safety:.1f}cm  zone={sonar.get_zone()}"
+        )
 
         # Auto-disengage if pressed against an obstacle. Mirrors what the
         # production three_point_turn tool does — back up first to create

@@ -42,16 +42,22 @@ def main() -> None:
     pan_parser = subparsers.add_parser("pan", help="Pan camera left or right")
     pan_parser.add_argument("direction", choices=["left", "right"])
     pan_parser.add_argument(
-        "degrees", type=int, nargs="?", default=DEFAULT_DEGREES,
-        help=f"Degrees to pan (default {DEFAULT_DEGREES})"
+        "degrees",
+        type=int,
+        nargs="?",
+        default=DEFAULT_DEGREES,
+        help=f"Degrees to pan (default {DEFAULT_DEGREES})",
     )
 
     # tilt up / tilt down
     tilt_parser = subparsers.add_parser("tilt", help="Tilt camera up or down")
     tilt_parser.add_argument("direction", choices=["up", "down"])
     tilt_parser.add_argument(
-        "degrees", type=int, nargs="?", default=DEFAULT_DEGREES,
-        help=f"Degrees to tilt (default {DEFAULT_DEGREES})"
+        "degrees",
+        type=int,
+        nargs="?",
+        default=DEFAULT_DEGREES,
+        help=f"Degrees to tilt (default {DEFAULT_DEGREES})",
     )
 
     # center

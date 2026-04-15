@@ -16,8 +16,8 @@ TEST_DURATION_SECONDS = 15
 PAUSE_BETWEEN_TURNS = 0.3
 
 STEER_PWM_FREQ = 1000
-STEER_DUTY = 100          # percent
-STEER_DURATION = 0.25     # seconds
+STEER_DUTY = 100  # percent
+STEER_DURATION = 0.25  # seconds
 DEAD_TIME = 0.05
 CENTER_SETTLE_TIME = 0.10
 
@@ -62,7 +62,9 @@ def steer_right(pwm_left: GPIO.PWM, pwm_right: GPIO.PWM) -> None:
     center(pwm_left, pwm_right)
 
 
-def cleanup(pwm_left: GPIO.PWM | None = None, pwm_right: GPIO.PWM | None = None) -> None:
+def cleanup(
+    pwm_left: GPIO.PWM | None = None, pwm_right: GPIO.PWM | None = None
+) -> None:
     try:
         if pwm_left and pwm_right:
             center(pwm_left, pwm_right)

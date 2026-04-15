@@ -5,6 +5,7 @@ Exposes all hardware controls as MCP tools for LLM-driven operation.
 """
 
 import sys
+
 sys.path.insert(0, "/home/rambabu/rambabu_rc")
 
 import os
@@ -67,8 +68,10 @@ def _init_hardware() -> None:
             try:
                 pan_tilt = PanTilt()
             except Exception as e:
-                print(f"[WARN] PanTilt not available (PCA9685 not connected?): {e}",
-                      file=sys.stderr)
+                print(
+                    f"[WARN] PanTilt not available (PCA9685 not connected?): {e}",
+                    file=sys.stderr,
+                )
                 pan_tilt = None
 
             camera = Camera()
@@ -93,6 +96,7 @@ def _hw() -> None:
     if not _hw_ready:
         _init_hardware()
 
+
 # ---------------------------------------------------------------------------
 # MCP server
 # ---------------------------------------------------------------------------
@@ -101,6 +105,7 @@ mcp = FastMCP("Rambabu RC Car")
 
 
 # ── Motor drive ───────────────────────────────────────────────────────────
+
 
 @mcp.tool()
 def motor_forward(speed: int = 60) -> str:
@@ -131,6 +136,7 @@ def motor_stop() -> str:
 
 
 # ── Steering ──────────────────────────────────────────────────────────────
+
 
 @mcp.tool()
 def steer_left() -> str:
@@ -173,6 +179,7 @@ def steer_center() -> str:
 
 
 # ── Camera pan/tilt ───────────────────────────────────────────────────────
+
 
 @mcp.tool()
 def camera_pan_left(degrees: int = 20) -> str:
@@ -247,6 +254,7 @@ def get_camera_angles() -> str:
 
 # ── Ultrasonic sensor ────────────────────────────────────────────────────
 
+
 @mcp.tool()
 def get_distance() -> str:
     """Get ultrasonic distance reading and obstacle status."""
@@ -260,6 +268,7 @@ def get_distance() -> str:
 
 # ── Camera capture ────────────────────────────────────────────────────────
 
+
 @mcp.tool()
 def capture_image() -> Image:
     """Capture a JPEG image from the camera. Returns the image directly."""
@@ -272,6 +281,7 @@ def capture_image() -> Image:
 
 
 # ── Speaker ───────────────────────────────────────────────────────────────
+
 
 @mcp.tool()
 def speak(text: str) -> str:
@@ -297,6 +307,7 @@ def play_audio(file_path: str) -> str:
 
 
 # ── System status ─────────────────────────────────────────────────────────
+
 
 @mcp.tool()
 def get_status() -> str:

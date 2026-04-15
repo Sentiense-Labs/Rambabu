@@ -98,7 +98,10 @@ def test_left_right_steering_15s():
 
         print(f"Completed {cycle} steering cycles in {elapsed:.1f}s")
         assert cycle > 0, "No steering cycles completed"
-        assert elapsed >= min(TEST_DURATION_SECONDS - 1, cycle * (STEER_PULSE_DURATION + PAUSE_BETWEEN_TURNS))
+        assert elapsed >= min(
+            TEST_DURATION_SECONDS - 1,
+            cycle * (STEER_PULSE_DURATION + PAUSE_BETWEEN_TURNS),
+        )
 
     finally:
         cleanup()

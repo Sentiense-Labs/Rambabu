@@ -35,8 +35,8 @@ from utils.logger import log_info, log_warning, log_error
 
 # ── UUIDs ─────────────────────────────────────────────────────────────────────
 RC_CAR_SERVICE_UUID = "A1B20000-C3D4-E5F6-A7B8-C9D0E1F20000"
-COMMAND_CHAR_UUID   = "A1B20001-C3D4-E5F6-A7B8-C9D0E1F20000"
-STATUS_CHAR_UUID    = "A1B20002-C3D4-E5F6-A7B8-C9D0E1F20000"
+COMMAND_CHAR_UUID = "A1B20001-C3D4-E5F6-A7B8-C9D0E1F20000"
+STATUS_CHAR_UUID = "A1B20002-C3D4-E5F6-A7B8-C9D0E1F20000"
 
 DEVICE_NAME = "RC-Car"
 _TAG = "[BLE]"
@@ -45,8 +45,10 @@ _TAG = "[BLE]"
 def _ble(msg: str) -> None:
     log_info(f"{_TAG} {msg}")
 
+
 def _ble_warn(msg: str) -> None:
     log_warning(f"{_TAG} {msg}")
+
 
 def _ble_err(msg: str) -> None:
     log_error(f"{_TAG} {msg}")
@@ -57,7 +59,10 @@ class BluetoothServer:
 
     def __init__(self, motor=None, pan_tilt=None, speaker=None, control_runner=None):
         self._handler = CommandHandler(
-            motor=motor, pan_tilt=pan_tilt, speaker=speaker, control_runner=control_runner
+            motor=motor,
+            pan_tilt=pan_tilt,
+            speaker=speaker,
+            control_runner=control_runner,
         )
         self._server: BlessServer | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -83,7 +88,7 @@ class BluetoothServer:
         """Signal the async server to stop."""
         if self._stop_event and self._loop:
             self._loop.call_soon_threadsafe(self._stop_event.set)
-        _ble(f"Server stopped")
+        _ble("Server stopped")
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
@@ -230,7 +235,7 @@ class BluetoothServer:
     def _addr_from_path(path: str) -> str:
         """Extract readable MAC from BlueZ path e.g. /org/bluez/hci0/dev_AA_BB_CC → AA:BB:CC"""
         try:
-            part = path.split("/")[-1]          # dev_AA_BB_CC_DD_EE_FF
+            part = path.split("/")[-1]  # dev_AA_BB_CC_DD_EE_FF
             return part.replace("dev_", "").replace("_", ":")
         except Exception:
             return path

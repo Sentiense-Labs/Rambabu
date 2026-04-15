@@ -11,9 +11,9 @@ from openwakeword.model import Model as WakeWordModel
 
 # ── Config ────────────────────────────────────────────────────────────────
 DEVICE_INDEX = 1
-SAMPLE_RATE = 16000    # 16kHz native — no resampling needed
+SAMPLE_RATE = 16000  # 16kHz native — no resampling needed
 CHANNELS = 1
-CHUNK_SIZE = 1280      # 80ms at 16kHz = exactly one OWW frame
+CHUNK_SIZE = 1280  # 80ms at 16kHz = exactly one OWW frame
 WAKEWORD_MODEL = "hey_jarvis"
 
 
@@ -29,7 +29,7 @@ def main() -> None:
         rate=SAMPLE_RATE,
         input=True,
         input_device_index=DEVICE_INDEX,
-        frames_per_buffer=CHUNK_SIZE,   # matches read size — no spin-loop on ALSA
+        frames_per_buffer=CHUNK_SIZE,  # matches read size — no spin-loop on ALSA
     )
 
     print(f'Say "hey jarvis" and watch the scores.')
@@ -52,9 +52,13 @@ def main() -> None:
 
             if score > 0.1:
                 bar = "#" * int(score * 50)
-                print(f"  frame {frame_count:5d} | score: {score:.4f} | peak: {peak_score:.4f} | {bar}")
+                print(
+                    f"  frame {frame_count:5d} | score: {score:.4f} | peak: {peak_score:.4f} | {bar}"
+                )
             elif frame_count % 50 == 0:
-                print(f"  frame {frame_count:5d} | score: {score:.4f} | peak: {peak_score:.4f} | (listening...)")
+                print(
+                    f"  frame {frame_count:5d} | score: {score:.4f} | peak: {peak_score:.4f} | (listening...)"
+                )
 
     except KeyboardInterrupt:
         print(f"\n\nPeak score observed: {peak_score:.4f}")

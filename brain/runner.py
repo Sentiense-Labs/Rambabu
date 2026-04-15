@@ -80,12 +80,26 @@ class ControlRunner:
     def _run(self, goal: str) -> None:
         self._publish({"status": "started", "goal": goal})
         try:
-            result = run_gemini_loop(goal, self._model, self._max_iterations, hw=self._hw)
+            result = run_gemini_loop(
+                goal, self._model, self._max_iterations, hw=self._hw
+            )
             self._publish({"status": "complete", "goal": goal, "result": result})
             logger.info(f"ControlRunner: complete — goal: {goal[:60]}")
         except Exception as exc:
             logger.error(f"ControlRunner: error — {exc}")
             self._publish({"status": "error", "goal": goal, "message": str(exc)})
         finally:
+            # Reset MovementManager so stale _direction doesn't trigger the
+            # active brake pulse if SonarGuard fires after the brain session
+            # ends and the user switches back to manual motor control.
+            if self._hw is not None:
+                mm = getattr(self._hw, "movement_manager", None)
+                if mm is not None:
+                    try:
+                        mm.stop()
+                    except Exception as exc:
+                        logger.warning(
+                            f"ControlRunner: movement_manager reset failed — {exc}"
+                        )
             with self._lock:
                 self._current_goal = None

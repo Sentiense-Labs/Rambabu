@@ -122,7 +122,9 @@ def main() -> None:
         if choice in ("2", "3"):
             # Center pan while testing tilt
             move_servo(pan_pwm, 90, "Pan")
-            tilt_min, tilt_max = sweep_servo(tilt_pwm, "Tilt", TILT_TEST_MIN, TILT_TEST_MAX)
+            tilt_min, tilt_max = sweep_servo(
+                tilt_pwm, "Tilt", TILT_TEST_MIN, TILT_TEST_MAX
+            )
 
         # Summary
         print(f"\n{'='*60}")

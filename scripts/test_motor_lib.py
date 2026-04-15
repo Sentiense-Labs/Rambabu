@@ -33,16 +33,28 @@ def main():
         time.sleep(0.5)
         distance = ultrasonic.get_distance()
         print(f"  Distance: {distance:.1f} cm")
-        print(f"  Obstacle threshold (stops forward): {config.OBSTACLE_DETECTION_DISTANCE} cm")
-        print(f"  Clear threshold (releases latch): {config.OBSTACLE_CLEAR_DISTANCE} cm")
+        print(
+            f"  Obstacle threshold (stops forward): {config.OBSTACLE_DETECTION_DISTANCE} cm"
+        )
+        print(
+            f"  Clear threshold (releases latch): {config.OBSTACLE_CLEAR_DISTANCE} cm"
+        )
 
         if distance <= config.OBSTACLE_DETECTION_DISTANCE:
-            print(f"\n  ⚠️  OBSTACLE WITHIN {config.OBSTACLE_DETECTION_DISTANCE}cm — front() will be BLOCKED")
-            print("  Move the car away from obstacles, or call back() first to clear the latch.")
+            print(
+                f"\n  ⚠️  OBSTACLE WITHIN {config.OBSTACLE_DETECTION_DISTANCE}cm — front() will be BLOCKED"
+            )
+            print(
+                "  Move the car away from obstacles, or call back() first to clear the latch."
+            )
         else:
-            print(f"\n  ✅ Path is clear ({distance:.1f}cm > {config.OBSTACLE_DETECTION_DISTANCE}cm)")
+            print(
+                f"\n  ✅ Path is clear ({distance:.1f}cm > {config.OBSTACLE_DETECTION_DISTANCE}cm)"
+            )
 
-        obstacle_check = lambda: ultrasonic.get_distance() <= config.OBSTACLE_DETECTION_DISTANCE
+        obstacle_check = (
+            lambda: ultrasonic.get_distance() <= config.OBSTACLE_DETECTION_DISTANCE
+        )
         clear_check = lambda: ultrasonic.get_distance() > config.OBSTACLE_CLEAR_DISTANCE
     except Exception as e:
         print(f"  ⚠️  Ultrasonic init failed: {e}")
@@ -67,17 +79,17 @@ def main():
     banner("Step 3: Testing each command")
 
     commands = [
-        ("BACK (clears latch first)",  lambda: motor.back(70)),
-        ("STOP",                        motor.stop),
-        ("FRONT",                       lambda: motor.front(70)),
-        ("STOP",                        motor.stop),
-        ("LEFT (pulse)",                motor.left),
-        ("RIGHT (pulse)",               motor.right),
-        ("STEER_LEFT_HOLD",             motor.steer_left_hold),
-        ("STEER_CENTER",                motor.steer_center),
-        ("STEER_RIGHT_HOLD",            motor.steer_right_hold),
-        ("STEER_CENTER",                motor.steer_center),
-        ("STOP",                        motor.stop),
+        ("BACK (clears latch first)", lambda: motor.back(70)),
+        ("STOP", motor.stop),
+        ("FRONT", lambda: motor.front(70)),
+        ("STOP", motor.stop),
+        ("LEFT (pulse)", motor.left),
+        ("RIGHT (pulse)", motor.right),
+        ("STEER_LEFT_HOLD", motor.steer_left_hold),
+        ("STEER_CENTER", motor.steer_center),
+        ("STEER_RIGHT_HOLD", motor.steer_right_hold),
+        ("STEER_CENTER", motor.steer_center),
+        ("STOP", motor.stop),
     ]
 
     for label, fn in commands:
