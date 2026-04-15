@@ -52,10 +52,12 @@ hw = HardwareContext(
 )
 
 # ── Agent ─────────────────────────────────────────────────────────────────────
+from agno.db.sqlite import SqliteDb
 from agno_ai.service import create_agno_service
 
+os_db = SqliteDb(db_file="agno_ai.db")
 logger.info("Creating agent service...")
-app = create_agno_service(hw=hw, enable_agent_os=True)
+app = create_agno_service(hw=hw, enable_agent_os=True, os_db=os_db)
 
 # ── Run ────────────────────────────────────────────────────────────────────────
 import uvicorn

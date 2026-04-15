@@ -28,6 +28,7 @@ def create_agno_service(
     enable_agent_os: bool = False,
     model_preset: str = "FAST",
     tool_call_limit: int = 100,
+    os_db: Any = None,
 ) -> Any:
     try:
         from fastapi import FastAPI
@@ -43,12 +44,14 @@ def create_agno_service(
         publish_callback=publish_callback,
         model_preset=model_preset,
         tool_call_limit=tool_call_limit,
+        os_db=os_db,
     )
     explorer_agent = ExplorerAgent(
         hw=hw,
         publish_callback=publish_callback,
         model_preset=model_preset,
         tool_call_limit=tool_call_limit,
+        os_db=os_db,
     )
 
     if not has_fastapi:
