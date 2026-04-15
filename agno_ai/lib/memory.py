@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from agno.db.sqlite import SqliteDb
 from agno_ai.lib.prompts import COMPRESS_PROMPT
-from agno_ai.utils.string import generate_id
+from agno.utils.string import generate_id
 
 if TYPE_CHECKING:
     from agno_ai.models.base import Model
