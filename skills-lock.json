@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "agno": {
+      "source": "smithery.ai",
+      "sourceType": "well-known",
+      "computedHash": "0aa0558e57cf225fc22cb24c447e23fdf0852c68f109be0d13fa266eb7ede96b"
+    }
+  }
+}
