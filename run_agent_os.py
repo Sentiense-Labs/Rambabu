@@ -11,6 +11,9 @@ Then connect to https://os.agno.com → Add OS → Local → http://<pi-ip>:8000
 from __future__ import annotations
 
 import logging
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("rambabu")
