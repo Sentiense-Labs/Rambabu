@@ -33,8 +33,16 @@ from typing import Any, Callable
 import httpx
 
 from agno.models.google import Gemini
-from agno.models.anthropic import Claude
-from agno.models.openai import OpenAIChat
+
+try:
+    from agno.models.anthropic import Claude
+except ImportError:
+    Claude = None  # type: ignore
+
+try:
+    from agno.models.openai import OpenAIChat
+except ImportError:
+    OpenAIChat = None  # type: ignore
 
 # ── Timeout constants (mirrors Mastra's undici setup) ────────────────────────────
 
