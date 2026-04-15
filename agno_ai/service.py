@@ -26,7 +26,7 @@ def create_agno_service(
     hw: HardwareContext,
     publish_callback: Callable[[dict[str, Any]], None] | None = None,
     enable_agent_os: bool = False,
-    model: str = "gemini-2.5-flash",
+    model_preset: str = "FAST",
     tool_call_limit: int = 100,
 ) -> Any:
     try:
@@ -41,13 +41,13 @@ def create_agno_service(
     goal_agent = GoalDrivenAgent(
         hw=hw,
         publish_callback=publish_callback,
-        model=model,
+        model_preset=model_preset,
         tool_call_limit=tool_call_limit,
     )
     explorer_agent = ExplorerAgent(
         hw=hw,
         publish_callback=publish_callback,
-        model=model,
+        model_preset=model_preset,
         tool_call_limit=tool_call_limit,
     )
 
