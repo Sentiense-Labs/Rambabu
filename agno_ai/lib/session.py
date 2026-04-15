@@ -13,8 +13,8 @@ import queue
 import threading
 from typing import Callable
 
-from agno.types.context import HardwareContext
-from agno.types.events import BrainEvent
+from agno_ai.types.context import HardwareContext
+from agno_ai.types.events import BrainEvent
 
 logger = logging.getLogger("agno.session")
 

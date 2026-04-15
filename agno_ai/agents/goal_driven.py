@@ -1,9 +1,13 @@
 """
-ExplorerAgent — continuous autonomous exploration agent.
+GoalDrivenAgent — Agno Agent wrapper for the rover brain.
 
-Unlike GoalDrivenAgent (goal-driven), ExplorerAgent runs indefinitely,
-roaming and narrating without a target. It uses ExplorationSessionManager
-instead of SessionManager.
+System prompt built programmatically via PromptBuilder (agno/lib/prompts.py).
+Registers all 10 tools and provides start/stop wired to SessionManager.
+
+Model configuration uses agno.models.ModelPresets:
+  model_preset="FAST"       → gemini-2.5-flash
+  model_preset="BALANCED"   → gemini-2.5-pro
+  compress_model_preset="COMPRESSION" → gemini-2.5-flash-lite
 """
 
 from __future__ import annotations
@@ -15,18 +19,14 @@ from typing import Any, Callable
 from agno.agent import Agent
 from agno.compression import CompressionManager
 from agno.db.sqlite import SqliteDb
-from agno.types.context import HardwareContext
-from agno import constants as C
-from agno.constants import check_gemini_key
-from agno.lib.prompts import (
-    build_soul_instructions,
-    build_exploration_instructions,
-    TOOL_ADDENDUM,
-)
-from agno.lib.explore_session import ExplorationSessionManager
-from agno.lib.memory import ObservationalMemory, SessionCompactor
-from agno.models import get_model
-from agno.tools import (
+from agno_ai.types.context import HardwareContext
+from agno_ai import constants as C
+from agno_ai.constants import check_gemini_key
+from agno_ai.lib.prompts import build_soul_instructions, TOOL_ADDENDUM
+from agno_ai.lib.session import SessionManager
+from agno_ai.lib.memory import ObservationalMemory, SessionCompactor
+from agno_ai.models import get_model
+from agno_ai.tools import (
     start_moving,
     stop_moving,
     move,
@@ -39,27 +39,21 @@ from agno.tools import (
     align_to_path,
 )
 
-logger = logging.getLogger("agno.explorer")
+logger = logging.getLogger("agno.agent")
 
-EXPLORER_SESSION_ID = "rambabu-explorer"
+SESSION_ID = "rambabu-rover"
 
 
-def _build_exploration_instructions(
+def _build_instructions(
     agent: Agent | None = None,
     session_state: dict | None = None,
     run_context: Any = None,
 ) -> str:
-    """Callable instructions for ExplorerAgent — soul + exploration overlay."""
-    return (
-        build_soul_instructions()
-        + "\n\n"
-        + build_exploration_instructions()
-        + "\n\n"
-        + TOOL_ADDENDUM
-    )
+    """Callable instructions for Agno Agent — built programmatically, no file read."""
+    return build_soul_instructions() + "\n\n" + TOOL_ADDENDUM
 
 
-class ExplorerAgent:
+class GoalDrivenAgent:
     def __init__(
         self,
         hw: HardwareContext,
@@ -102,7 +96,7 @@ class ExplorerAgent:
                 three_point_turn,
                 align_to_path,
             ],
-            instructions=_build_exploration_instructions,
+            instructions=_build_instructions,
             num_history_runs=3,
             tool_call_limit=tool_call_limit,
             db=self._db,
@@ -118,17 +112,17 @@ class ExplorerAgent:
         if self._db is not None:
             self._obs_memory = ObservationalMemory(
                 db=self._db,
-                session_id=EXPLORER_SESSION_ID,
+                session_id=SESSION_ID,
                 token_reflection_threshold=token_reflection_threshold,
                 compress_model=compress_model,
             )
             self._session_compactor = SessionCompactor(
                 db=self._db,
-                session_id=EXPLORER_SESSION_ID,
+                session_id=SESSION_ID,
                 compress_model=compress_model,
             )
 
-        self._session = ExplorationSessionManager(
+        self._session = SessionManager(
             agent=self._agent,
             hw=hw,
             publish_callback=publish_callback,
@@ -140,13 +134,9 @@ class ExplorerAgent:
     def agent(self) -> Agent:
         return self._agent
 
-    def start(self) -> dict[str, Any]:
-        return self._session.start()
+    def start(self, goal: str) -> dict[str, Any]:
+        return self._session.start_goal(goal)
 
     def stop(self) -> dict[str, Any]:
-        self._session.flush_transcript()
+        self._session.flush_transcript(self._session.current_goal or "session")
         return self._session.stop()
-
-    @property
-    def is_exploring(self) -> bool:
-        return self._session.is_exploring

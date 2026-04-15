@@ -1,7 +1,7 @@
 from agno.middleware.logging import with_logging
 from agno.middleware.timeout import with_timeout
-from agno.types.context import HardwareContext
-from agno import constants as C
+from agno_ai.types.context import HardwareContext
+from agno_ai import constants as C
 
 _VALID_ACTIONS = {"pan_left", "pan_right", "tilt_up", "tilt_down", "center", "angles"}
 _DEFAULT_DEGREES = 40

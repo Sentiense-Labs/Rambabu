@@ -2,12 +2,12 @@ import time as _time
 
 from agno.middleware.logging import with_logging
 from agno.middleware.timeout import with_timeout
-from agno.types.context import HardwareContext
-from agno import constants as C
+from agno_ai.types.context import HardwareContext
+from agno_ai import constants as C
 
 _DRIVE_SPEED = C.DRIVE_SPEED
 _STEER_LOCK_SETTLE_S = C.STEER_LOCK_SETTLE_S
-_CORRECTION_SECONDS = C._CORRECTION_SECONDS
+_REVERSE_HARD_CAP_S = C.REVERSE_HARD_CAP_S
 
 
 def _get_hw(run_context=None) -> HardwareContext | None:
@@ -28,51 +28,44 @@ def _stop_motion(hw: HardwareContext) -> None:
 
 
 @with_logging
-@with_timeout(seconds=C.TIMEOUT_ALIGN_TO_PATH)
-def align_to_path(
-    drift_direction: str,
-    correction_strength: str = "light",
-    run_context=None,
-) -> str:
-    """Apply a brief steering correction to re-center on a path.
-    drift_direction: which way you have drifted (steer OPPOSITE to correct).
-    correction_strength: light=0.2s, medium=0.4s, strong=0.6s.
+@with_timeout(seconds=C.TIMEOUT_REVERSE_STEER)
+def reverse_steer(steer_direction: str, seconds: float = 0.4, run_context=None) -> str:
+    """Reverse with steering bias. In reverse, left steer swings the FRONT
+    right and rear left (opposite of forward).
     """
-    if drift_direction not in ("left", "right"):
-        return f'{{"status": "error", "message": "invalid drift_direction: {drift_direction}"}}'
-
-    seconds = _CORRECTION_SECONDS.get(correction_strength)
-    if seconds is None:
-        return f'{{"status": "error", "message": "invalid correction_strength: {correction_strength}"}}'
+    if steer_direction not in ("left", "right"):
+        return f'{{"status": "error", "message": "invalid steer_direction: {steer_direction}"}}'
 
     hw = _get_hw(run_context)
     if hw is None or hw.motor is None:
         return '{"status": "error", "message": "motor not available"}'
 
-    correction_side = "right" if drift_direction == "left" else "left"
+    seconds = max(0.05, min(float(seconds), _REVERSE_HARD_CAP_S))
+    note = (
+        "front swung RIGHT, rear swung LEFT"
+        if steer_direction == "left"
+        else "front swung LEFT, rear swung RIGHT"
+    )
 
     _stop_motion(hw)
     try:
         motor = hw.motor
-        if correction_side == "left":
+        if steer_direction == "left":
             motor.steer_left_hold()
         else:
             motor.steer_right_hold()
         _time.sleep(_STEER_LOCK_SETTLE_S)
-        motor.front(_DRIVE_SPEED)
+        motor.back(_DRIVE_SPEED)
         _time.sleep(seconds)
         motor.stop()
-        motor.front(_DRIVE_SPEED)
-        _time.sleep(0.3)
-        motor.stop()
+        motor.steer_center()
         return str(
             {
                 "status": "ok",
-                "maneuver": "align_to_path",
-                "drift_direction": drift_direction,
-                "correction_side": correction_side,
-                "correction_strength": correction_strength,
+                "maneuver": "reverse_steer",
+                "steer_direction": steer_direction,
                 "duration_s": round(seconds, 2),
+                "note": note,
             }
         )
     except Exception as exc:

@@ -36,7 +36,7 @@ speaker = Speaker()
 sonar_guard = SonarGuard(ultrasonic=ultrasonic, motor=motor)
 movement_manager = MovementManager(motor=motor, sonar_guard=sonar_guard)
 
-from agno.types.context import HardwareContext
+from agno_ai.types.context import HardwareContext
 
 hw = HardwareContext(
     motor=motor,
@@ -49,7 +49,7 @@ hw = HardwareContext(
 )
 
 # ── Agent ─────────────────────────────────────────────────────────────────────
-from agno.service import create_agno_service
+from agno_ai.service import create_agno_service
 
 logger.info("Creating agent service...")
 app = create_agno_service(hw=hw, enable_agent_os=True)

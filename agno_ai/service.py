@@ -14,10 +14,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
-from agno.agents.goal_driven import GoalDrivenAgent
-from agno.agents.explorer import ExplorerAgent
-from agno.constants import check_gemini_key
-from agno.types.context import HardwareContext
+from agno_ai.agents.goal_driven import GoalDrivenAgent
+from agno_ai.agents.explorer import ExplorerAgent
+from agno_ai.constants import check_gemini_key
+from agno_ai.types.context import HardwareContext
 
 logger = logging.getLogger("agno.service")
 

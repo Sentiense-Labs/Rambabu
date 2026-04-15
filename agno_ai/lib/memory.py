@@ -24,7 +24,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from agno.db.sqlite import SqliteDb
-from agno.lib.prompts import COMPRESS_PROMPT
+from agno_ai.lib.prompts import COMPRESS_PROMPT
 from agno.utils.string import generate_id
 
 if TYPE_CHECKING:

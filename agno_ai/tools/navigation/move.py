@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from agno.middleware.logging import with_logging
 from agno.middleware.timeout import with_timeout
-from agno.types.context import HardwareContext
-from agno import constants as C
+from agno_ai.types.context import HardwareContext
+from agno_ai import constants as C
 import time
 
 _DRIVE_SPEED = C.DRIVE_SPEED

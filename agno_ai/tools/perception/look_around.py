@@ -15,8 +15,8 @@ from PIL import Image
 
 from agno.middleware.logging import with_logging
 from agno.middleware.timeout import with_timeout
-from agno.types.context import HardwareContext
-from agno import constants as C
+from agno_ai.types.context import HardwareContext
+from agno_ai import constants as C
 from google import genai as google_genai
 
 _GEMINI_VISION_MODEL = C.GEMINI_VISION_MODEL

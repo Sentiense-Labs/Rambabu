@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from agno.lib.prompts import TOOL_ADDENDUM, COMPRESS_PROMPT
+from agno_ai.lib.prompts import TOOL_ADDENDUM, COMPRESS_PROMPT
 
 # Re-export with underscore prefix for backward compatibility
 _TOOL_ADDENDUM = TOOL_ADDENDUM
