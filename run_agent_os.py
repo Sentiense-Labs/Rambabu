@@ -33,11 +33,8 @@ ultrasonic = Ultrasonic()
 pan_tilt = PanTilt()
 camera = Camera()
 speaker = Speaker()
-movement_manager = MovementManager(motor=motor)
-sonar_guard = SonarGuard(
-    ultrasonic=ultrasonic,
-    movement_manager=movement_manager,
-)
+sonar_guard = SonarGuard(ultrasonic=ultrasonic, motor=motor)
+movement_manager = MovementManager(motor=motor, sonar_guard=sonar_guard)
 
 from agno.types.context import HardwareContext
 
