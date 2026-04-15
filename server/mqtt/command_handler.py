@@ -10,11 +10,19 @@ from utils.logger import log_info, log_warning
 class CommandHandler:
     """Routes MQTT command payloads to hardware methods."""
 
-    def __init__(self, motor=None, pan_tilt=None, speaker=None, control_runner=None, rear_ultrasonic=None):
+    def __init__(
+        self,
+        motor=None,
+        pan_tilt=None,
+        speaker=None,
+        control_runner=None,
+        rear_ultrasonic=None,
+        rambabu_agent=None,
+    ):
         self._motor = motor
         self._pan_tilt = pan_tilt
         self._speaker = speaker
-        self._control_runner = control_runner
+        self._control_runner = control_runner or rambabu_agent
         self._rear_ultrasonic = rear_ultrasonic
 
     def handle(self, topic: str, payload: dict) -> None:
@@ -43,8 +51,8 @@ class CommandHandler:
 
         speed = data.get("speed")
         angle = data.get("angle")
-        pan_angle = data.get("panservoangle", angle)   # IoT platform field name
-        tilt_angle = data.get("tiltservoangle", angle) # IoT platform field name
+        pan_angle = data.get("panservoangle", angle)  # IoT platform field name
+        tilt_angle = data.get("tiltservoangle", angle)  # IoT platform field name
         degrees = data.get("degrees", 10)
 
         match action:
@@ -134,7 +142,9 @@ class CommandHandler:
                 if goal:
                     self._control_runner.start(goal)
                 else:
-                    log_warning("CommandHandler: CONTROL_GOAL received with no goal text")
+                    log_warning(
+                        "CommandHandler: CONTROL_GOAL received with no goal text"
+                    )
 
             case Action.CONTROL_STOP if self._control_runner:
                 self._control_runner.stop()
