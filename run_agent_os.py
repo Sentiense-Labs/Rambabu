@@ -25,17 +25,6 @@ from lib.camera import Camera
 from lib.speaker import Speaker
 from brain.sonar_guard import SonarGuard
 from brain.movement_manager import MovementManager
-from config import (  # noqa: F401 — pulls in all constants
-    MOTOR_FORWARD_PIN,
-    MOTOR_BACKWARD_PIN,
-    MOTOR_STEERING_PIN,
-    ULTRASONIC_TRIG_PIN,
-    ULTRASONIC_ECHO_PIN,
-    PAN_SERVO_PIN,
-    TILT_SERVO_PIN,
-    CAMERA_WARMUP_S,
-    MQTT_CONTROL_RESULT_TOPIC,
-)
 
 GPIO.setmode(GPIO.BCM)
 
