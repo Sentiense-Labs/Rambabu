@@ -55,8 +55,10 @@ def _ble_err(msg: str) -> None:
 class BluetoothServer:
     """BLE GATT peripheral — accepts motor/servo commands from a phone."""
 
-    def __init__(self, motor=None, pan_tilt=None, speaker=None):
-        self._handler = CommandHandler(motor=motor, pan_tilt=pan_tilt, speaker=speaker)
+    def __init__(self, motor=None, pan_tilt=None, speaker=None, control_runner=None):
+        self._handler = CommandHandler(
+            motor=motor, pan_tilt=pan_tilt, speaker=speaker, control_runner=control_runner
+        )
         self._server: BlessServer | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None

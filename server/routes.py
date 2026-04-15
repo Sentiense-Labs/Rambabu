@@ -15,19 +15,20 @@ routes = Blueprint("routes", __name__)
 motor = None
 camera = None
 ultrasonic = None
+rear_ultrasonic = None
 pan_tilt = None
 speaker = None
 mode_manager = None
 start_time = time.time()
-_last_obstacle_alert_time = 0.0
 
 
-def set_hardware_dependencies(m, c, u, pt, s, mm):
+def set_hardware_dependencies(m, c, u, ru, pt, s, mm):
     """Set hardware module references"""
-    global motor, camera, ultrasonic, pan_tilt, speaker, mode_manager
+    global motor, camera, ultrasonic, rear_ultrasonic, pan_tilt, speaker, mode_manager
     motor = m
     camera = c
     ultrasonic = u
+    rear_ultrasonic = ru
     pan_tilt = pt
     speaker = s
     mode_manager = mm
@@ -70,13 +71,6 @@ def motor_action(action):
                 # Motor refused — obstacle detected or latched
                 log_info(f"API: /motor/front BLOCKED — {result.get('message')}")
 
-                # Play obstacle alert with cooldown
-                global _last_obstacle_alert_time
-                now = time.time()
-                if speaker and (now - _last_obstacle_alert_time) >= config.OBSTACLE_ALERT_COOLDOWN:
-                    speaker.play_mp3_async(config.OBSTACLE_ALERT_AUDIO)
-                    _last_obstacle_alert_time = now
-
                 distance = ultrasonic.get_distance() if ultrasonic else 0
                 return (
                     jsonify(
@@ -90,7 +84,19 @@ def motor_action(action):
                     409,
                 )
         elif action == "back":
-            motor.back(speed or config.DEFAULT_SPEED)
+            result = motor.back(speed or config.DEFAULT_SPEED)
+            if result.get("status") == "error":
+                log_info(f"API: /motor/back BLOCKED — {result.get('message')}")
+                dist = rear_ultrasonic.get_distance() if rear_ultrasonic else 0
+                return (
+                    jsonify({
+                        "error_code": result.get("error_code", "REAR_OBSTACLE_DETECTED"),
+                        "message": result.get("message"),
+                        "distance_cm": round(dist, 1),
+                        "stop_distance_cm": config.REAR_OBSTACLE_DETECTION_DISTANCE,
+                    }),
+                    409,
+                )
         elif action == "left":
             motor.left()
         elif action == "right":
@@ -287,6 +293,10 @@ def get_status():
                 if ultrasonic
                 else False
             ),
+            "rear_sensor": {
+                "distance_cm": round(rear_ultrasonic.get_distance(), 1) if rear_ultrasonic else None,
+                "obstacle_confirmed": rear_ultrasonic.is_obstacle_confirmed() if rear_ultrasonic else None,
+            },
             "servo_angles": (
                 pan_tilt.get_angles() if pan_tilt else {"pan": 90, "tilt": 90}
             ),
@@ -310,14 +320,34 @@ def get_distance():
     try:
         distance = ultrasonic.get_distance()
         zone = ultrasonic.get_zone()
-        obstacle_detected = distance <= config.OBSTACLE_DETECTION_DISTANCE
 
-        log_info(f"API: GET /sensor/distance - {distance:.1f}cm ({zone})")
+        rear_data = {}
+        if rear_ultrasonic:
+            rear_dist = rear_ultrasonic.get_distance()
+            rear_zone = "danger" if rear_dist <= config.REAR_OBSTACLE_DETECTION_DISTANCE else (
+                "warning" if rear_dist <= config.REAR_OBSTACLE_CLEAR_DISTANCE else "safe"
+            )
+            rear_data = {
+                "distance_cm": round(rear_dist, 1),
+                "obstacle_confirmed": rear_ultrasonic.is_obstacle_confirmed(),
+                "zone": rear_zone,
+                "stop_distance_cm": config.REAR_OBSTACLE_DETECTION_DISTANCE,
+            }
+
+        log_info(f"API: GET /sensor/distance - front={distance:.1f}cm ({zone})")
         return jsonify(
             {
+                "front": {
+                    "distance_cm": round(distance, 1),
+                    "obstacle_confirmed": ultrasonic.is_obstacle_confirmed(),
+                    "zone": zone,
+                    "stop_distance_cm": config.OBSTACLE_DETECTION_DISTANCE,
+                },
+                "rear": rear_data,
+                # Legacy flat fields kept for backwards compat
                 "distance_cm": round(distance, 1),
                 "zone": zone,
-                "obstacle_detected": obstacle_detected,
+                "obstacle_detected": distance <= config.OBSTACLE_DETECTION_DISTANCE,
                 "stop_distance_cm": config.OBSTACLE_DETECTION_DISTANCE,
                 "warning_distance_cm": config.WARNING_DISTANCE,
                 "safe_distance_cm": config.SAFE_DISTANCE,

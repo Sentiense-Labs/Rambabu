@@ -19,8 +19,10 @@ import config
 from utils.logger import log_warning, log_debug
 
 # Rolling window size for median filter.
-# 5 readings at 20Hz = 250ms window. Median needs 3/5 to agree.
-_WINDOW_SIZE: int = 5
+# 9 readings at 20Hz = 450ms window. Median needs 5/9 to agree — wider
+# than the original 5/250ms because indoor multipath echoes were producing
+# sustained 3-sample ghost streaks that won the median.
+_WINDOW_SIZE: int = 9
 
 # Consecutive median readings below threshold to confirm obstacle.
 _CONFIRM_COUNT: int = 2
@@ -36,12 +38,25 @@ _MAX_DELTA_PER_SAMPLE: float = 25.0
 class Ultrasonic:
     """Ultrasonic distance sensor with median-filtered background measurement."""
 
-    def __init__(self):
-        """Initialize ultrasonic sensor with background thread."""
+    def __init__(
+        self,
+        trig_pin: int = config.ULTRASONIC_TRIG,
+        echo_pin: int = config.ULTRASONIC_ECHO,
+        detection_distance: int = config.OBSTACLE_DETECTION_DISTANCE,
+    ):
+        """Initialize ultrasonic sensor with background thread.
+
+        Args:
+            trig_pin: GPIO BCM pin for the trigger signal (default: front sensor pin).
+            echo_pin: GPIO BCM pin for the echo return (default: front sensor pin).
+            detection_distance: Distance threshold (cm) for obstacle confirmation.
+                Use REAR_OBSTACLE_DETECTION_DISTANCE for the rear sensor.
+        """
         GPIO.setwarnings(False)
 
-        self.trig_pin = config.ULTRASONIC_TRIG
-        self.echo_pin = config.ULTRASONIC_ECHO
+        self.trig_pin = trig_pin
+        self.echo_pin = echo_pin
+        self._detection_distance = detection_distance
 
         GPIO.setup(self.trig_pin, GPIO.OUT)
         GPIO.setup(self.echo_pin, GPIO.IN)
@@ -101,7 +116,7 @@ class Ultrasonic:
         If we're already near an obstacle, any close reading is plausible.
         From far away, a sudden drop bigger than _MAX_DELTA_PER_SAMPLE is noise.
         """
-        if current_median <= config.OBSTACLE_DETECTION_DISTANCE * 1.5:
+        if current_median <= self._detection_distance * 1.5:
             return True
         delta = current_median - raw
         return delta <= _MAX_DELTA_PER_SAMPLE
@@ -120,7 +135,7 @@ class Ultrasonic:
                     self.last_distance = median_distance
 
                     # Streak on MEDIAN — noise can't build a streak
-                    if median_distance <= config.OBSTACLE_DETECTION_DISTANCE:
+                    if median_distance <= self._detection_distance:
                         self._close_streak += 1
                     else:
                         self._close_streak = 0
@@ -170,6 +185,20 @@ class Ultrasonic:
         """Returns median-filtered distance in cm (thread-safe)."""
         with self.lock:
             return self.last_distance
+
+    def get_min_distance(self) -> float:
+        """Pessimistic safety read — minimum of the rolling window.
+
+        Multipath echoes off far walls can dominate the median and hide a
+        closer obstacle. The minimum catches the closest reading in the
+        window, which is what we want for safety decisions.
+
+        Returns 999.0 if the window is empty.
+        """
+        with self.lock:
+            if not self._window:
+                return 999.0
+            return min(self._window)
 
     def is_obstacle_confirmed(self) -> bool:
         """True when filtered evidence confirms a real obstacle.

@@ -63,6 +63,7 @@ class MqttClient:
         self._client.on_connect = self._on_connect
         self._client.on_disconnect = self._on_disconnect
         self._client.on_message = self._on_message
+        self._client.on_subscribe = self._on_subscribe
 
     def _on_connect(self, client, userdata, flags, reason_code, properties):
         if reason_code == 0:
@@ -74,10 +75,19 @@ class MqttClient:
             log_info(f"MQTT: Subscribed to {config.MQTT_COMMANDS_TOPIC}")
             client.subscribe(config.MQTT_CAMERA_CONTROL_TOPIC, qos=1)
             log_info(f"MQTT: Subscribed to {config.MQTT_CAMERA_CONTROL_TOPIC}")
+            client.subscribe(config.MQTT_CONTROL_TOPIC, qos=1)
+            log_info(f"MQTT: Subscribed to {config.MQTT_CONTROL_TOPIC}")
         else:
             log_error(f"MQTT: Connection failed — reason code {reason_code}")
             with self._lock:
                 self._connected = False
+
+    def _on_subscribe(self, client, userdata, mid, reason_codes, properties):
+        for i, rc in enumerate(reason_codes):
+            if rc.value <= 2:
+                log_info(f"MQTT: SUBACK mid={mid} [{i}] granted QoS={rc.value}")
+            else:
+                log_error(f"MQTT: SUBACK mid={mid} [{i}] REJECTED — code={rc.value} ({rc})")
 
     def _on_disconnect(self, client, userdata, flags, reason_code, properties):
         with self._lock:

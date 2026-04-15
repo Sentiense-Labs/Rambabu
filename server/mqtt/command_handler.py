@@ -10,10 +10,12 @@ from utils.logger import log_info, log_warning
 class CommandHandler:
     """Routes MQTT command payloads to hardware methods."""
 
-    def __init__(self, motor=None, pan_tilt=None, speaker=None):
+    def __init__(self, motor=None, pan_tilt=None, speaker=None, control_runner=None, rear_ultrasonic=None):
         self._motor = motor
         self._pan_tilt = pan_tilt
         self._speaker = speaker
+        self._control_runner = control_runner
+        self._rear_ultrasonic = rear_ultrasonic
 
     def handle(self, topic: str, payload: dict) -> None:
         """Route a command payload to the appropriate hardware action.
@@ -125,6 +127,17 @@ class CommandHandler:
             # ── Smooth return to center ────────────────────────────────────────
             case Action.SERVO_CENTER if self._pan_tilt:
                 self._pan_tilt.center()
+
+            # Control (Gemini-driven goal execution)
+            case Action.CONTROL_GOAL if self._control_runner:
+                goal = (data.get("goal") or "").strip()
+                if goal:
+                    self._control_runner.start(goal)
+                else:
+                    log_warning("CommandHandler: CONTROL_GOAL received with no goal text")
+
+            case Action.CONTROL_STOP if self._control_runner:
+                self._control_runner.stop()
 
             case _:
                 log_warning(

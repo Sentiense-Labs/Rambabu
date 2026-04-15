@@ -188,28 +188,58 @@ class Speaker:
         return self.connect()
 
     def _set_default_sink(self) -> None:
-        """Set the Bluetooth speaker as the default PulseAudio sink."""
-        import time
-        time.sleep(config.BT_SINK_WAIT)
+        """Set the Bluetooth speaker as the default PulseAudio sink.
 
+        Fast path: if a bluez sink is already the default, return
+        immediately (common case when already connected).
+
+        Slow path: poll for the bluez sink to appear (up to
+        BT_SINK_WAIT seconds) in 100ms ticks, then set it as default.
+        Replaces an older blind `time.sleep(BT_SINK_WAIT)` that paid
+        the full wait on every init.
+        """
+        import time
+
+        # Fast path — bluez already the default sink.
         try:
-            sinks_output = subprocess.run(
-                ["pactl", "list", "sinks", "short"],
+            current = subprocess.run(
+                ["pactl", "get-default-sink"],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=2,
             )
-
-            bt_sink = None
-            for line in sinks_output.stdout.splitlines():
-                if "bluez" in line.lower():
-                    bt_sink = line.split()[1]
-                    break
-
-            if bt_sink is None:
-                log_warning("No Bluetooth sink found in PulseAudio")
+            if "bluez" in current.stdout.lower():
+                log_info(f"Default sink already bluez: {current.stdout.strip()}")
                 return
+        except (subprocess.TimeoutExpired, OSError):
+            pass  # Fall through to slow path
 
+        # Slow path — poll for the sink up to BT_SINK_WAIT seconds.
+        deadline = time.time() + config.BT_SINK_WAIT
+        bt_sink: str | None = None
+        while time.time() < deadline:
+            try:
+                sinks_output = subprocess.run(
+                    ["pactl", "list", "sinks", "short"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                for line in sinks_output.stdout.splitlines():
+                    if "bluez" in line.lower():
+                        bt_sink = line.split()[1]
+                        break
+                if bt_sink is not None:
+                    break
+            except (subprocess.TimeoutExpired, OSError):
+                pass
+            time.sleep(0.1)
+
+        if bt_sink is None:
+            log_warning("No Bluetooth sink found in PulseAudio")
+            return
+
+        try:
             subprocess.run(
                 ["pactl", "set-default-sink", bt_sink],
                 capture_output=True,
@@ -221,7 +251,6 @@ class Speaker:
                 timeout=5,
             )
             log_info(f"Default sink set to {bt_sink}")
-
         except (subprocess.TimeoutExpired, OSError) as exc:
             log_error(f"Failed to set default sink: {exc}")
 
@@ -396,6 +425,52 @@ class Speaker:
         thread.start()
         return {"status": "ok", "action": "play_mp3_async",
                 "file": Path(file_path).name}
+
+    # ------------------------------------------------------------------
+    # MP3 playback — raw bytes (in-memory, no disk)
+    # ------------------------------------------------------------------
+
+    def play_mp3_bytes(self, mp3_data: bytes) -> dict:
+        """Play mp3 bytes through the speaker via mpg123 stdin (blocking).
+
+        Pipes `mp3_data` directly into `mpg123 -` without writing to
+        disk. Use this when the mp3 is produced in-memory (e.g. from a
+        TTS API) and there is no need to persist it.
+        """
+        if not mp3_data:
+            return {"status": "error", "error_code": "EMPTY_AUDIO",
+                    "message": "No mp3 data provided"}
+
+        try:
+            subprocess.run(
+                ["mpg123", "-q", "-"],
+                input=mp3_data,
+                capture_output=True,
+                timeout=60,
+            )
+            log_info(f"Played MP3 bytes: {len(mp3_data)} bytes")
+            return {"status": "ok", "action": "play_mp3_bytes",
+                    "bytes": len(mp3_data)}
+        except subprocess.TimeoutExpired:
+            log_error("MP3 bytes playback timed out")
+            return {"status": "error", "error_code": "PLAYBACK_TIMEOUT",
+                    "message": "Playback timed out"}
+        except OSError as exc:
+            log_error(f"MP3 bytes playback error: {exc}")
+            return {"status": "error", "error_code": "PLAYBACK_ERROR",
+                    "message": str(exc)}
+
+    def play_mp3_bytes_async(self, mp3_data: bytes) -> dict:
+        """Play mp3 bytes in a background thread (non-blocking)."""
+        if not mp3_data:
+            return {"status": "error", "error_code": "EMPTY_AUDIO",
+                    "message": "No mp3 data provided"}
+        thread = threading.Thread(
+            target=self.play_mp3_bytes, args=(mp3_data,), daemon=True
+        )
+        thread.start()
+        return {"status": "ok", "action": "play_mp3_bytes_async",
+                "bytes": len(mp3_data)}
 
     # ------------------------------------------------------------------
     # TTS — async variants

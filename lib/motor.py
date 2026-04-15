@@ -6,6 +6,7 @@ Controls rear drive motor and steering motor using RPi.GPIO
 
 import RPi.GPIO as GPIO
 import time
+import threading
 from utils.logger import log_info, log_error
 import config
 
@@ -36,6 +37,14 @@ class MotorController:
         # until distance exceeds OBSTACLE_CLEAR_DISTANCE (70cm), or
         # the car moves backward (which clears the latch explicitly).
         self._obstacle_latched = False
+
+        # Rear obstacle latch: mirrors the front latch for backward motion.
+        self._rear_obstacle_latched = False
+        self._rear_obstacle_check = None   # Returns True if rear path is blocked
+        self._rear_obstacle_clear = None   # Returns True if rear path is clear (hysteresis)
+
+        # Thread lock — protects direction, latches, and PWM from race conditions
+        self._lock = threading.Lock()
 
         # GPIO.setmode() is handled by main.py before creating this object
         GPIO.setwarnings(False)
@@ -74,6 +83,11 @@ class MotorController:
         """True when the car is actively driving forward"""
         return self._direction == "forward"
 
+    @property
+    def is_moving_backward(self) -> bool:
+        """True when the car is actively driving backward"""
+        return self._direction == "backward"
+
     def latch_obstacle(self) -> None:
         """Engage obstacle latch — called by monitor when obstacle detected."""
         if not self._obstacle_latched:
@@ -96,6 +110,31 @@ class MotorController:
             return False
         return True
 
+    def latch_rear_obstacle(self) -> None:
+        """Engage rear obstacle latch — called by rear monitor when obstacle detected."""
+        if not self._rear_obstacle_latched:
+            self._rear_obstacle_latched = True
+            log_info("Motor: Rear obstacle latch engaged — backward blocked until obstacle clears")
+
+    def set_rear_obstacle_check(self, check_fn, clear_fn=None) -> None:
+        """Inject rear obstacle check callbacks.
+
+        check_fn() -> True if rear path is blocked.
+        clear_fn() -> True if rear path is genuinely clear (hysteresis).
+        """
+        self._rear_obstacle_check = check_fn
+        self._rear_obstacle_clear = clear_fn
+
+    def _check_rear_latch(self) -> bool:
+        """Returns True if backward is still blocked. Only releases when clear_fn passes."""
+        if not self._rear_obstacle_latched:
+            return False
+        if self._rear_obstacle_clear and self._rear_obstacle_clear():
+            self._rear_obstacle_latched = False
+            log_info("Motor: Rear obstacle latch released — path is clear (hysteresis passed)")
+            return False
+        return True
+
     def front(self, speed: int = config.DEFAULT_SPEED) -> dict:
         """Drive forward at given speed (0-100). Refuses if obstacle detected or latched."""
         if self._check_latch():
@@ -110,6 +149,9 @@ class MotorController:
             return {"status": "error", "error_code": "OBSTACLE_DETECTED",
                     "message": "Obstacle detected — cannot move forward"}
 
+        # Clear rear obstacle latch — moving forward escapes rear blockage
+        self._rear_obstacle_latched = False
+
         self.pwm_backward.ChangeDutyCycle(0)
         duty_cycle = min(max(speed, 0), 100)
         self.pwm_forward.ChangeDutyCycle(duty_cycle)
@@ -118,10 +160,24 @@ class MotorController:
         return {"status": "ok", "direction": "forward", "speed": duty_cycle}
 
     def back(self, speed: int = config.DEFAULT_SPEED) -> dict:
-        """Drive backward at given speed (0-100). Clears obstacle latch."""
+        """Drive backward at given speed (0-100). Checks rear obstacle latch, clears front latch."""
+        # Check rear obstacle latch
+        if self._check_rear_latch():
+            log_info("Motor: Backward blocked — rear obstacle latch active")
+            return {"status": "error", "error_code": "REAR_OBSTACLE_DETECTED",
+                    "message": "Rear obstacle latched — path not clear yet"}
+
+        # Check rear obstacle inline
+        if self._rear_obstacle_check and self._rear_obstacle_check():
+            self.latch_rear_obstacle()
+            log_info("Motor: Backward BLOCKED by rear obstacle check")
+            return {"status": "error", "error_code": "REAR_OBSTACLE_DETECTED",
+                    "message": "Rear obstacle detected — cannot move backward"}
+
+        # Clear front obstacle latch — moving backward escapes front blockage
         if self._obstacle_latched:
             self._obstacle_latched = False
-            log_info("Motor: Obstacle latch cleared by backward movement")
+            log_info("Motor: Front obstacle latch cleared by backward movement")
         self.pwm_forward.ChangeDutyCycle(0)
         duty_cycle = min(max(speed, 0), 100)
         self.pwm_backward.ChangeDutyCycle(duty_cycle)
@@ -204,10 +260,9 @@ class MotorController:
 
     def stop(self) -> dict:
         """Stop all motors immediately."""
-        self.pwm_forward.ChangeDutyCycle(0)
-        self.pwm_backward.ChangeDutyCycle(0)
-        self.pwm_steer_left.ChangeDutyCycle(0)
-        self.pwm_steer_right.ChangeDutyCycle(0)
+        for pwm in (self.pwm_forward, self.pwm_backward, self.pwm_steer_left, self.pwm_steer_right):
+            if pwm is not None:
+                pwm.ChangeDutyCycle(0)
         GPIO.output(self.steer_left, GPIO.LOW)
         GPIO.output(self.steer_right, GPIO.LOW)
         self._direction = "stopped"
@@ -218,13 +273,10 @@ class MotorController:
         """Clean up GPIO and PWM resources."""
         try:
             self.stop()
-            if self.pwm_forward:
-                self.pwm_forward.stop()
-            if self.pwm_backward:
-                self.pwm_backward.stop()
-            if self.pwm_steer_left:
-                self.pwm_steer_left.stop()
-            if self.pwm_steer_right:
-                self.pwm_steer_right.stop()
+            for attr in ("pwm_forward", "pwm_backward", "pwm_steer_left", "pwm_steer_right"):
+                pwm = getattr(self, attr, None)
+                if pwm is not None:
+                    pwm.stop()
+                    setattr(self, attr, None)
         except Exception as e:
             log_error(f"Motor cleanup error: {e}")

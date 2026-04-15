@@ -31,6 +31,8 @@ dependencies = [
     "adafruit-blinka>=9.0.4",
     "smbus2>=0.6.0",
     "mcp>=1.27.0",
+    "anthropic>=0.92.0",
+    "google-genai>=1.0.0",
 ]
 requires-python = ">=3.10"
 

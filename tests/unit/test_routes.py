@@ -28,6 +28,7 @@ def mock_ultrasonic():
     u = MagicMock()
     u.get_distance.return_value = 100.0
     u.get_zone.return_value = "safe"
+    u.is_obstacle_confirmed.return_value = False
     return u
 
 

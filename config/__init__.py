@@ -30,6 +30,11 @@ ULTRASONIC_ECHO: Final[GPIOPin] = 24  # Echo pin (via voltage divider!)
 # HC-SR04 ECHO outputs 5V but Pi GPIO tolerates only 3.3V
 # Wiring: ECHO → 1kΩ → GPIO 24 ┬─ 2kΩ → GND
 
+# Rear ultrasonic sensor (HC-SR04) — GPIO BCM numbering
+# ⚠️ Echo pin requires voltage divider: 1kΩ → GPIO 22 ┬ 2kΩ → GND
+ULTRASONIC_REAR_TRIG: Final[GPIOPin] = 23
+ULTRASONIC_REAR_ECHO: Final[GPIOPin] = 22
+
 
 # ============================================================================
 # MOTOR SPEED SETTINGS
@@ -57,6 +62,10 @@ STOP_DISTANCE: Final[int] = 50  # Zone label threshold
 OBSTACLE_DETECTION_DISTANCE: Final[int] = 50  # cm — hard stop
 # Obstacle clear — latch releases only when distance exceeds this (hysteresis)
 OBSTACLE_CLEAR_DISTANCE: Final[int] = 70  # cm — must be > OBSTACLE_DETECTION_DISTANCE
+
+# Rear obstacle safety thresholds (tighter than front — less stopping room behind)
+REAR_OBSTACLE_DETECTION_DISTANCE: Final[int] = 30  # cm — latch and stop
+REAR_OBSTACLE_CLEAR_DISTANCE: Final[int] = 45       # cm — hysteresis release
 
 
 # ============================================================================
@@ -134,8 +143,10 @@ AWS_IOT_KEEPALIVE: Final[int] = 60
 MQTT_TELEMETRY_TOPIC: Final[str] = "car/telemetry"
 MQTT_COMMANDS_TOPIC: Final[str] = f"mqtt/device/{AWS_IOT_CLIENT_ID}/command"
 MQTT_CAMERA_CONTROL_TOPIC: Final[str] = f"mqtt/device/{AWS_IOT_CLIENT_ID}/Cameracontrol"
+MQTT_CONTROL_TOPIC: Final[str] = f"mqtt/device/{AWS_IOT_CLIENT_ID}/control"
 MQTT_DETECTIONS_TOPIC: Final[str] = "car/detections"
 MQTT_ALERTS_TOPIC: Final[str] = "car/alerts"
+MQTT_CONTROL_RESULT_TOPIC: Final[str] = "car/control"
 
 
 # ============================================================================
@@ -163,6 +174,18 @@ SPEAKER_RATE: Final[int] = 150  # Words per minute
 SPEAKER_VOLUME: Final[float] = 0.8  # 0.0 to 1.0
 ANNOUNCE_CONFIDENCE_THRESHOLD: Final[float] = 0.8
 SAY_DISTANCE_THRESHOLD: Final[int] = 100  # cm
+
+# ElevenLabs TTS — expressive "opinions" speech.
+# API key is read from the ELEVENLABS_API_KEY environment variable.
+# Audio is returned as raw mp3 bytes and piped to the speaker — never
+# written to disk. On failure, callers should fall back to pyttsx3.
+ELEVENLABS_API_URL: Final[str] = "https://api.elevenlabs.io/v1/text-to-speech"
+ELEVENLABS_VOICE_ID: Final[str] = "kmSVBPu7loj4ayNinwWM"
+ELEVENLABS_MODEL_ID: Final[str] = "eleven_flash_v2_5"  # Cheapest + fastest
+ELEVENLABS_TIMEOUT: Final[float] = 15.0  # Seconds for HTTP request
+ELEVENLABS_STABILITY: Final[float] = 0.5
+ELEVENLABS_SIMILARITY: Final[float] = 0.5
+ELEVENLABS_SPEED: Final[float] = 1.14  # Slightly faster than default
 
 # Audio library
 AUDIO_DIR: Final[str] = "audio"

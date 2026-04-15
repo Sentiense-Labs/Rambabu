@@ -28,11 +28,17 @@ _LED0_ON_L = 0x06
 
 _I2C_BUS = 1
 
-# Continuous movement
+# Continuous movement (joystick)
 _PAN_STEP_DEG: int = 1
 _PAN_TICK_SEC: float = 0.05
 _TILT_STEP_DEG: int = 5
 _TILT_TICK_SEC: float = 0.10
+
+# Smooth one-shot sweep (used by pan_to / tilt_to)
+_PAN_SWEEP_STEP: int = 1       # degrees per I2C write
+_PAN_SWEEP_DELAY: float = 0.02  # seconds between steps (~50 steps/s)
+_TILT_SWEEP_STEP: int = 2
+_TILT_SWEEP_DELAY: float = 0.04
 
 # SG90 pulse range at 50Hz (20ms period), in 12-bit ticks (0-4095)
 _MIN_TICKS = 102   # 0.5ms → 0°
@@ -145,15 +151,49 @@ class PanTilt:
         servo_angle = self._clamp(logical_angle + config.TILT_OFFSET, 0, 180)
         self._write_servo(config.SERVO_TILT_CHANNEL, servo_angle)
 
+    def _sweep_channel(
+        self, channel: int, from_servo: int, to_servo: int,
+        step: int, delay: float,
+    ) -> None:
+        """Sweep a servo degree-by-degree from from_servo to to_servo.
+
+        PWM stays alive throughout (smooth motion). Killed only at the end.
+        Mirrors the technique used in tests/hardware/test_pca9685.py.
+        """
+        if from_servo == to_servo:
+            self._move_and_kill(channel, to_servo)
+            return
+        direction = 1 if to_servo > from_servo else -1
+        current = from_servo
+        while True:
+            self._write_servo(channel, current)
+            time.sleep(delay)
+            if current == to_servo:
+                break
+            current += direction * step
+            if direction > 0:
+                current = min(current, to_servo)
+            else:
+                current = max(current, to_servo)
+        self._kill_channel(channel)
+
     def _move_and_kill_pan(self, logical_angle: int) -> None:
-        """Move pan servo then kill PWM — jitter-free hold."""
-        servo_angle = self._clamp(logical_angle + config.PAN_OFFSET, 0, 180)
-        self._move_and_kill(config.SERVO_PAN_CHANNEL, servo_angle)
+        """Smoothly sweep pan servo to target then kill PWM — jitter-free hold."""
+        from_servo = self._clamp(self.pan_angle + config.PAN_OFFSET, 0, 180)
+        to_servo = self._clamp(logical_angle + config.PAN_OFFSET, 0, 180)
+        self._sweep_channel(
+            config.SERVO_PAN_CHANNEL, from_servo, to_servo,
+            _PAN_SWEEP_STEP, _PAN_SWEEP_DELAY,
+        )
 
     def _move_and_kill_tilt(self, logical_angle: int) -> None:
-        """Move tilt servo then kill PWM — jitter-free hold."""
-        servo_angle = self._clamp(logical_angle + config.TILT_OFFSET, 0, 180)
-        self._move_and_kill(config.SERVO_TILT_CHANNEL, servo_angle)
+        """Smoothly sweep tilt servo to target then kill PWM — jitter-free hold."""
+        from_servo = self._clamp(self.tilt_angle + config.TILT_OFFSET, 0, 180)
+        to_servo = self._clamp(logical_angle + config.TILT_OFFSET, 0, 180)
+        self._sweep_channel(
+            config.SERVO_TILT_CHANNEL, from_servo, to_servo,
+            _TILT_SWEEP_STEP, _TILT_SWEEP_DELAY,
+        )
 
     def _stop_current_movement(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -313,11 +353,6 @@ class PanTilt:
 
     def cleanup(self) -> None:
         self._stop_current_movement()
-        try:
-            self.center()
-            time.sleep(0.5)
-        except Exception:
-            pass
         self._kill_both()
         try:
             self._bus.close()

@@ -59,3 +59,7 @@ class Action(StrEnum):
     # Autonomous mode
     AUTONOMOUS_START = "AUTONOMOUS_START"
     AUTONOMOUS_STOP = "AUTONOMOUS_STOP"
+
+    # Control (Gemini-driven goal execution)
+    CONTROL_GOAL = "CONTROL_GOAL"
+    CONTROL_STOP = "CONTROL_STOP"

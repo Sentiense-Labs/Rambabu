@@ -1,4 +1,10 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(journalctl -u aicar -n 30 --no-pager)",
+      "Bash(sudo journalctl:*)"
+    ]
+  },
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true,
     "everything-claude-code@everything-claude-code": true

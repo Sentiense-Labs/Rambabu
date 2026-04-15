@@ -1,12 +1,19 @@
 [Unit]
-Description=AI RC Car - Autonomous Navigation System
-After=network.target
+Description=Rambabu RC Car — main controller
+After=network.target bluetooth.target
+Wants=bluetooth.target
 
 [Service]
 Type=simple
-User=pi
+User=rambabu
+Group=rambabu
 WorkingDirectory=/home/rambabu/rambabu_rc
-ExecStart=/usr/bin/python3 /home/rambabu/rambabu_rc/main.py
+EnvironmentFile=/home/rambabu/rambabu_rc/.env
+Environment=PYTHONPATH=/usr/lib/python3/dist-packages
+Environment=PYTHONUNBUFFERED=1
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=PULSE_SERVER=unix:/run/user/1000/pulse/native
+ExecStart=/home/rambabu/rambabu_rc/.venv/bin/python /home/rambabu/rambabu_rc/main.py
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
