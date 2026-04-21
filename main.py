@@ -18,10 +18,9 @@ from lib.camera import Camera
 from server.app import create_app
 from server.mqtt.client import MqttClient
 from server.mqtt.command_handler import CommandHandler
-from agno.agents import GoalDrivenAgent, ExplorerAgent
-from agno.types.context import HardwareContext
+from agno_ai.agents import GoalDrivenAgent, ExplorerAgent
+from agno_ai.types.context import HardwareContext
 from brain.sonar_guard import SonarGuard
-from brain.movement_manager import MovementManager
 from lib.bluetooth_server import BluetoothServer
 import config
 
@@ -341,19 +340,15 @@ def main():
             mqtt_client = MqttClient()
             sonar_guard = SonarGuard(ultrasonic=ultrasonic, motor=motor)
             sonar_guard.start()
-            movement_manager = MovementManager(
-                motor=motor,
-                sonar_guard=sonar_guard,
-            )
-            log_info("SonarGuard + MovementManager initialized")
+            log_info("SonarGuard initialized")
             hw = HardwareContext(
                 motor=motor,
                 ultrasonic=ultrasonic,
+                rear_ultrasonic=rear_ultrasonic,
                 pan_tilt=pan_tilt,
                 camera=camera,
                 speaker=speaker,
                 sonar_guard=sonar_guard,
-                movement_manager=movement_manager,
             )
             goal_agent = GoalDrivenAgent(
                 hw=hw,

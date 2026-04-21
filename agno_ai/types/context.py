@@ -18,8 +18,8 @@ class HardwareContext:
 
     motor: Any = None
     ultrasonic: Any = None
+    rear_ultrasonic: Any = None
     pan_tilt: Any = None
     camera: Any = None
     speaker: Any = None
     sonar_guard: Any = None
-    movement_manager: Any = None

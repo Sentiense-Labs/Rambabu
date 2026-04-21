@@ -1,23 +1,17 @@
+from agno_ai import get_hw
 from agno_ai.middleware.logging import with_logging
 from agno_ai.middleware.timeout import with_timeout
-from agno_ai.types.context import HardwareContext
 from agno_ai import constants as C
 
 _VALID_ACTIONS = {"pan_left", "pan_right", "tilt_up", "tilt_down", "center", "angles"}
 _DEFAULT_DEGREES = 40
 
 
-def _get_hw(run_context=None) -> HardwareContext | None:
-    if run_context is None:
-        return None
-    return run_context.session_state.get("hw")
-
-
 @with_logging
 @with_timeout(seconds=C.TIMEOUT_PAN_TILT)
 def pan_tilt(action: str, degrees: int = _DEFAULT_DEGREES, run_context=None) -> str:
     """Aim the camera: pan_left, pan_right, tilt_up, tilt_down, center, angles."""
-    hw = _get_hw(run_context)
+    hw = get_hw()
     if hw is None or hw.pan_tilt is None:
         return '{"status": "error", "message": "pan_tilt not available"}'
     if action not in _VALID_ACTIONS:

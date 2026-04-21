@@ -1,5 +1,6 @@
 import time as _time
 
+from agno_ai import get_hw
 from agno_ai.middleware.logging import with_logging
 from agno_ai.middleware.timeout import with_timeout
 from agno_ai.types.context import HardwareContext
@@ -7,19 +8,11 @@ from agno_ai import constants as C
 
 _DRIVE_SPEED = C.DRIVE_SPEED
 _STEER_LOCK_SETTLE_S = C.STEER_LOCK_SETTLE_S
-_REVERSE_HARD_CAP_S = C.REVERSE_HARD_CAP_S
-
-
-def _get_hw(run_context=None) -> HardwareContext | None:
-    if run_context is None:
-        return None
-    return run_context.session_state.get("hw")
+_REVERSE_MAX_S = 8.0
 
 
 def _stop_motion(hw: HardwareContext) -> None:
-    if hw.movement_manager is not None:
-        hw.movement_manager.stop()
-    elif hw.motor is not None:
+    if hw.motor is not None:
         hw.motor.stop()
         try:
             hw.motor.steer_center()
@@ -36,11 +29,11 @@ def reverse_steer(steer_direction: str, seconds: float = 0.4, run_context=None) 
     if steer_direction not in ("left", "right"):
         return f'{{"status": "error", "message": "invalid steer_direction: {steer_direction}"}}'
 
-    hw = _get_hw(run_context)
+    hw = get_hw()
     if hw is None or hw.motor is None:
         return '{"status": "error", "message": "motor not available"}'
 
-    seconds = max(0.05, min(float(seconds), _REVERSE_HARD_CAP_S))
+    seconds = max(0.05, min(float(seconds), _REVERSE_MAX_S))
     note = (
         "front swung RIGHT, rear swung LEFT"
         if steer_direction == "left"

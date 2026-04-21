@@ -76,7 +76,7 @@ PRESETS: dict[str, dict[str, Any]] = {
         "provider": "google",
         "description": "Gemini 2.5 Flash — $0.30/$2.50 per 1M tokens, 1M context",
         "use_case": "Default agent model, development, cost-sensitive",
-        "extra_kwargs": {},
+        "extra_kwargs": {"thinking_budget": 2048},
     },
     "BALANCED": {
         "model_class": Gemini,
@@ -84,7 +84,7 @@ PRESETS: dict[str, dict[str, Any]] = {
         "provider": "google",
         "description": "Gemini 2.5 Pro — $1.25/$10.00 per 1M tokens, 2M context",
         "use_case": "Complex reasoning, large context tasks",
-        "extra_kwargs": {},
+        "extra_kwargs": {"thinking_budget": 4096},
     },
     "COMPRESSION": {
         "model_class": Gemini,
@@ -92,7 +92,7 @@ PRESETS: dict[str, dict[str, Any]] = {
         "provider": "google",
         "description": "Gemini 2.5 Flash Lite — cheapest for background synthesis",
         "use_case": "Memory compression, observation/reflect passes",
-        "extra_kwargs": {},
+        "extra_kwargs": {"thinking_budget": 0},
     },
     "VISION": {
         "model_class": Gemini,

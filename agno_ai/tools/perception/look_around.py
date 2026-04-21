@@ -13,9 +13,9 @@ import os
 import cv2
 from PIL import Image
 
+from agno_ai import get_hw
 from agno_ai.middleware.logging import with_logging
 from agno_ai.middleware.timeout import with_timeout
-from agno_ai.types.context import HardwareContext
 from agno_ai import constants as C
 from google import genai as google_genai
 
@@ -38,16 +38,17 @@ _LOOK_AROUND_DEFAULT = (
     "what you see. If everything in view is blocked or cluttered, say "
     "'none — back up'."
 )
+
+_LOOK_AROUND_TARGET_RULE = (
+    "\n\nIf the question asks about a specific object and you can see it, "
+    "add a final line exactly like this: "
+    "'TARGET [object name]: visible at [left / front / right / far left / far right]'. "
+    "If you cannot see it, do NOT add this line."
+)
 _LOOK_AROUND_OUTPUT_RULES = (
     "Output only the spoken words — no brackets, no stage directions, "
     "no bullet points, no labels."
 )
-
-
-def _get_hw(run_context=None) -> HardwareContext | None:
-    if run_context is None:
-        return None
-    return run_context.session_state.get("hw")
 
 
 def _build_prompt(question: str | None) -> str:
@@ -57,6 +58,7 @@ def _build_prompt(question: str | None) -> str:
             "Respond to that request based on what you see in the image, "
             "in 2-3 short conversational sentences — first person, present "
             "tense. Stay in character as Rambabu."
+            + _LOOK_AROUND_TARGET_RULE
         )
     else:
         task = _LOOK_AROUND_DEFAULT
@@ -67,7 +69,7 @@ def _build_prompt(question: str | None) -> str:
 @with_timeout(seconds=C.TIMEOUT_LOOK_AROUND)
 def look_around(question: str | None = None, run_context=None) -> str:
     """Capture a frame and describe it. Pass a question to focus the answer."""
-    hw = _get_hw(run_context)
+    hw = get_hw()
     if hw is None or hw.camera is None:
         return '{"status": "error", "message": "camera not available"}'
 

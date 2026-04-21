@@ -25,7 +25,7 @@ import threading
 import time
 from typing import Callable
 
-from brain.sonar_guard import (
+from agno_ai.brain.sonar_guard import (
     SonarGuard,
     ZONE_CLOSE,
     ZONE_CRITICAL,
@@ -178,6 +178,34 @@ class MovementManager:
             "status": "ok",
             "direction": direction,
             "speed": speed,
+        }
+
+    def go_timed(
+        self, direction: str, seconds: float, speed: int = DEFAULT_SPEED
+    ) -> dict:
+        """Begin movement and auto-stop after seconds. Non-blocking.
+
+        Starts movement via go(), then spawns a daemon thread to call stop()
+        after the duration. Returns immediately so the session loop stays
+        responsive to events.
+        """
+        result = self.go(direction, speed)
+        if result.get("status") != "ok":
+            return result
+
+        def _stop_after():
+            time.sleep(seconds)
+            if self._direction == direction:
+                self.stop()
+
+        t = threading.Thread(target=_stop_after, daemon=True)
+        t.start()
+        return {
+            "status": "ok",
+            "direction": direction,
+            "speed": speed,
+            "duration_s": seconds,
+            "note": "Background timer started — stop() will be called after duration.",
         }
 
     def stop(self) -> dict:
@@ -415,14 +443,14 @@ class MovementManager:
             self._safe_call(self._on_emergency_stop, distance)
             return
 
-        # Close while moving forward: brake, stop, mark, report.
+        # Close while moving forward: slow down and continue cautiously.
+        # Do NOT stop — let the LLM decide next action through normal reasoning.
+        # This avoids unnecessary wake-ups and excessive API calls.
         if new_zone == ZONE_CLOSE and forward_motion:
-            self._brake_and_stop()
-            self._reset_state()
+            self._motor.set_speed(30)
             with self._lock:
-                self._was_safety_stopped = True
-                self._safety_stop_reason = "OBSTACLE"
-                self._safety_stop_distance_cm = distance
+                self._speed = 30
+            logger.info(f"MovementManager: slowed to 30% — {distance:.1f}cm")
 
         if suppress:
             return

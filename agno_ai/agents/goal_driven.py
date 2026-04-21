@@ -19,6 +19,7 @@ from typing import Any, Callable
 from agno.agent import Agent
 from agno.compression import CompressionManager
 from agno.db.sqlite import SqliteDb
+from agno.memory import MemoryManager
 from agno_ai.types.context import HardwareContext
 from agno_ai import constants as C
 from agno_ai.constants import check_gemini_key
@@ -27,12 +28,13 @@ from agno_ai.lib.session import SessionManager
 from agno_ai.lib.memory import ObservationalMemory, SessionCompactor
 from agno_ai.models import get_model
 from agno_ai.tools import (
-    start_moving,
     stop_moving,
     move,
+    move_cm,
     distance,
     look_around,
     pan_tilt,
+    visual_survey,
     say,
     reverse_steer,
     three_point_turn,
@@ -44,15 +46,6 @@ logger = logging.getLogger("agno.agent")
 SESSION_ID = "rambabu-rover"
 
 
-def _build_instructions(
-    agent: Agent | None = None,
-    session_state: dict | None = None,
-    run_context: Any = None,
-) -> str:
-    """Callable instructions for Agno Agent — built programmatically, no file read."""
-    return build_soul_instructions() + "\n\n" + TOOL_ADDENDUM
-
-
 class GoalDrivenAgent:
     def __init__(
         self,
@@ -60,15 +53,13 @@ class GoalDrivenAgent:
         publish_callback: Callable[[dict[str, Any]], None] | None = None,
         db_path: str | None = None,
         os_db: "SqliteDb | None" = None,
-        model_preset: str = "FAST",
+        model_preset: str = "BALANCED",
         tool_call_limit: int = C.DEFAULT_MAX_ITERATIONS,
         token_reflection_threshold: int = 1500,
         compress_model_preset: str = "COMPRESSION",
     ) -> None:
         self._hw = hw
         self._publish = publish_callback
-        self._model_preset = model_preset
-        self._tool_call_limit = tool_call_limit
 
         check_gemini_key()
 
@@ -83,28 +74,53 @@ class GoalDrivenAgent:
         agent_model = get_model(model_preset)
         compress_model = get_model(compress_model_preset)
 
+        memory_manager = (
+            MemoryManager(
+                model=compress_model,
+                memory_capture_instructions=(
+                    "Extract spatial facts about Rambabu's physical environment: "
+                    "rooms and areas visited, obstacles and furniture encountered, "
+                    "room layouts, navigation outcomes, and recurring hazards. "
+                    "Ignore greetings, jokes, and meta-commentary."
+                ),
+                db=self._db,
+                update_memories=True,
+                add_memories=True,
+            )
+            if self._db is not None
+            else None
+        )
+
         self._agent = Agent(
+            name="Rambabu",
             model=agent_model,
+            instructions=self._build_instructions,
             tools=[
-                start_moving,
                 stop_moving,
                 move,
+                move_cm,
                 distance,
                 look_around,
                 pan_tilt,
+                visual_survey,
                 say,
                 reverse_steer,
                 three_point_turn,
                 align_to_path,
             ],
-            instructions=_build_instructions,
-            num_history_runs=3,
+            num_history_runs=1,
             tool_call_limit=tool_call_limit,
             db=self._db,
+            memory_manager=memory_manager,
+            update_memory_on_run=self._db is not None,
+            user_id="rambabu",
+            dependencies={"hw": hw},
+            add_dependencies_to_context=True,
             compress_tool_results=True,
             compression_manager=CompressionManager(
+                model=compress_model,
                 compress_tool_results=True,
-                compress_tool_results_limit=5,
+                compress_tool_results_limit=2,
             ),
         )
 
@@ -130,6 +146,19 @@ class GoalDrivenAgent:
             obs_memory=self._obs_memory,
             session_compactor=self._session_compactor,
         )
+
+    def _build_instructions(
+        self,
+        agent: Agent | None = None,
+        session_state: dict | None = None,
+        run_context: Any = None,
+    ) -> str:
+        soul = build_soul_instructions() + "\n\n" + TOOL_ADDENDUM
+        if self._obs_memory:
+            obs = self._obs_memory.get_observations()
+            if obs:
+                return f"PERSISTENT OBSERVATIONS (from previous sessions):\n{obs}\n\n{soul}"
+        return soul
 
     @property
     def agent(self) -> Agent:

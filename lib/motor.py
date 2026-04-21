@@ -141,6 +141,16 @@ class MotorController:
         self._rear_obstacle_check = check_fn
         self._rear_obstacle_clear = clear_fn
 
+    def set_speed(self, speed: int) -> dict:
+        """Change forward speed while already moving. No-op if not moving forward."""
+        speed = max(0, min(int(speed), 100))
+        if self._direction not in ("forward", "forward_slow"):
+            return {"status": "ok", "action": "no-op", "reason": "not_moving_forward"}
+        self.pwm_forward.ChangeDutyCycle(speed)
+        self._speed = speed
+        log_info(f"Motor: Speed set to {speed}%")
+        return {"status": "ok", "speed": speed}
+
     def _check_rear_latch(self) -> bool:
         """Returns True if backward is still blocked. Only releases when clear_fn passes."""
         if not self._rear_obstacle_latched:
@@ -299,8 +309,11 @@ class MotorController:
         ):
             if pwm is not None:
                 pwm.ChangeDutyCycle(0)
-        GPIO.output(self.steer_left, GPIO.LOW)
-        GPIO.output(self.steer_right, GPIO.LOW)
+        try:
+            GPIO.output(self.steer_left, GPIO.LOW)
+            GPIO.output(self.steer_right, GPIO.LOW)
+        except Exception:
+            pass
         self._direction = "stopped"
         log_info("Motor: Stopped")
         return {"status": "ok", "direction": "stopped"}

@@ -26,9 +26,8 @@ def create_agno_service(
     hw: HardwareContext,
     publish_callback: Callable[[dict[str, Any]], None] | None = None,
     enable_agent_os: bool = False,
-    model_preset: str = "FAST",
     tool_call_limit: int = 100,
-    os_db: Any = None,
+    os_db_file: str | None = "agno_ai.db",
 ) -> Any:
     try:
         from fastapi import FastAPI
@@ -39,17 +38,22 @@ def create_agno_service(
 
     check_gemini_key()
 
+    os_db = None
+    if os_db_file:
+        from agno.db.sqlite import SqliteDb
+
+        os_db = SqliteDb(db_file=os_db_file)
+        os_db._create_all_tables()
+
     goal_agent = GoalDrivenAgent(
         hw=hw,
         publish_callback=publish_callback,
-        model_preset=model_preset,
         tool_call_limit=tool_call_limit,
         os_db=os_db,
     )
     explorer_agent = ExplorerAgent(
         hw=hw,
         publish_callback=publish_callback,
-        model_preset=model_preset,
         tool_call_limit=tool_call_limit,
         os_db=os_db,
     )
@@ -99,7 +103,11 @@ def create_agno_service(
         try:
             from agno.os import AgentOS
 
-            os_app = AgentOS(agents=[goal_agent.agent, explorer_agent.agent]).get_app()
+            os_db_for_agos = goal_agent._db
+            os_app = AgentOS(
+                agents=[goal_agent.agent, explorer_agent.agent],
+                db=os_db_for_agos,
+            ).get_app()
             app.mount("/", os_app)
             logger.info("AgentOS dashboard enabled at /")
         except Exception as exc:

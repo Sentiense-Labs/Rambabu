@@ -15,6 +15,7 @@ from typing import Any, Callable
 from agno.agent import Agent
 from agno.compression import CompressionManager
 from agno.db.sqlite import SqliteDb
+from agno.memory import MemoryManager
 from agno_ai.types.context import HardwareContext
 from agno_ai import constants as C
 from agno_ai.constants import check_gemini_key
@@ -27,12 +28,13 @@ from agno_ai.lib.explore_session import ExplorationSessionManager
 from agno_ai.lib.memory import ObservationalMemory, SessionCompactor
 from agno_ai.models import get_model
 from agno_ai.tools import (
-    start_moving,
     stop_moving,
     move,
+    move_cm,
     distance,
     look_around,
     pan_tilt,
+    visual_survey,
     say,
     reverse_steer,
     three_point_turn,
@@ -89,15 +91,34 @@ class ExplorerAgent:
         agent_model = get_model(model_preset)
         compress_model = get_model(compress_model_preset)
 
+        memory_manager = (
+            MemoryManager(
+                model=compress_model,
+                memory_capture_instructions=(
+                    "Extract spatial facts discovered during autonomous exploration: "
+                    "new rooms or zones entered, interesting landmarks, recurring obstacles, "
+                    "dead ends, traversable paths, and any environmental layout details. "
+                    "Ignore jokes and personality quips."
+                ),
+                db=self._db,
+                update_memories=True,
+                add_memories=True,
+            )
+            if self._db is not None
+            else None
+        )
+
         self._agent = Agent(
+            name="Explorer",
             model=agent_model,
             tools=[
-                start_moving,
                 stop_moving,
                 move,
+                move_cm,
                 distance,
                 look_around,
                 pan_tilt,
+                visual_survey,
                 say,
                 reverse_steer,
                 three_point_turn,
@@ -107,10 +128,16 @@ class ExplorerAgent:
             num_history_runs=3,
             tool_call_limit=tool_call_limit,
             db=self._db,
+            memory_manager=memory_manager,
+            update_memory_on_run=self._db is not None,
+            user_id="rambabu",
+            dependencies={"hw": hw},
+            add_dependencies_to_context=True,
             compress_tool_results=True,
             compression_manager=CompressionManager(
+                model=compress_model,
                 compress_tool_results=True,
-                compress_tool_results_limit=5,
+                compress_tool_results_limit=3,
             ),
         )
 

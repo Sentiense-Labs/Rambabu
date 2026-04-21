@@ -1,5 +1,6 @@
 import time as _time
 
+from agno_ai import get_hw
 from agno_ai.middleware.logging import with_logging
 from agno_ai.middleware.timeout import with_timeout
 from agno_ai.types.context import HardwareContext
@@ -10,16 +11,8 @@ _STEER_LOCK_SETTLE_S = C.STEER_LOCK_SETTLE_S
 _CORRECTION_SECONDS = C._CORRECTION_SECONDS
 
 
-def _get_hw(run_context=None) -> HardwareContext | None:
-    if run_context is None:
-        return None
-    return run_context.session_state.get("hw")
-
-
 def _stop_motion(hw: HardwareContext) -> None:
-    if hw.movement_manager is not None:
-        hw.movement_manager.stop()
-    elif hw.motor is not None:
+    if hw.motor is not None:
         hw.motor.stop()
         try:
             hw.motor.steer_center()
@@ -45,7 +38,7 @@ def align_to_path(
     if seconds is None:
         return f'{{"status": "error", "message": "invalid correction_strength: {correction_strength}"}}'
 
-    hw = _get_hw(run_context)
+    hw = get_hw()
     if hw is None or hw.motor is None:
         return '{"status": "error", "message": "motor not available"}'
 

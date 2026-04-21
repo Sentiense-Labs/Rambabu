@@ -95,7 +95,7 @@ class Ultrasonic:
         distance = pulse_duration * 17150
         distance = round(distance, 2)
 
-        if 2 <= distance <= 400:
+        if 5 <= distance <= 400:
             return distance
 
         return self.last_distance
@@ -193,12 +193,22 @@ class Ultrasonic:
         closer obstacle. The minimum catches the closest reading in the
         window, which is what we want for safety decisions.
 
+        Readings that are implausibly far below the current median are excluded
+        (HC-SR04 ghost spikes — crosstalk echoes that register as ~2-5 cm even
+        when no obstacle is near). The plausibility gate is _MAX_DELTA_PER_SAMPLE
+        unless we're already in close-approach mode (median ≤ detection × 1.5).
+
         Returns 999.0 if the window is empty.
         """
         with self.lock:
             if not self._window:
                 return 999.0
-            return min(self._window)
+            median = self._median()
+            close_approach = median <= self._detection_distance * 1.5
+            if close_approach:
+                return min(self._window)
+            plausible = [v for v in self._window if median - v <= _MAX_DELTA_PER_SAMPLE]
+            return min(plausible) if plausible else median
 
     def is_obstacle_confirmed(self) -> bool:
         """True when filtered evidence confirms a real obstacle.

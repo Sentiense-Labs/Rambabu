@@ -1,22 +1,31 @@
 """
-SessionManager — event bus + short-run agent loop.
+SessionManager — agent loop for goal-based execution.
 
-Each goal runs in a background thread. The loop drains queued BrainEvents
-and feeds them to the agent as user messages, simulating the event-driven
-wake pattern of the original brain.py.
+Each goal runs in a background thread. The agent calls tools directly and
+decides when the goal is complete. The session ends when the agent stops
+calling tools and the motor is not running.
 """
 
 from __future__ import annotations
 
+import json
 import logging
-import queue
+import os
 import threading
+import time
 from typing import Callable
 
 from agno_ai.types.context import HardwareContext
-from agno_ai.types.events import BrainEvent
+from agno_ai.lib.nav_log import get_nav_log, reset_nav_log
+from agno_ai.lib.target_tracker import get_target_tracker, reset_target_tracker
 
 logger = logging.getLogger("agno.session")
+
+
+def _motor_is_moving(hw: HardwareContext) -> bool:
+    if hw.motor is None:
+        return False
+    return hw.motor.is_moving_forward or hw.motor.is_moving_backward
 
 
 class SessionManager:
@@ -30,20 +39,14 @@ class SessionManager:
     ) -> None:
         self._agent = agent
         self._hw = hw
-        self._publish = publish_callback
+        self._publish_callback = publish_callback
         self._obs_memory = obs_memory
         self._session_compactor = session_compactor
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
-        self._bus: queue.Queue[BrainEvent] = queue.Queue()
         self._transcript: list[str] = []
-
-        # Register callbacks on MovementManager to populate the bus
-        if hw.movement_manager is not None:
-            hw.movement_manager._on_zone_change = self._on_zone_change  # noqa: SLF001
-            hw.movement_manager._on_emergency_stop = (
-                self._on_emergency_stop
-            )  # noqa: SLF001
+        self._iteration: int = 0
+        self._prev_motor_moving: bool = False
 
     # ── public ────────────────────────────────────────────────────────────────
 
@@ -67,8 +70,8 @@ class SessionManager:
 
     def stop(self) -> dict:
         self._stop_event.set()
-        if self._hw.movement_manager is not None:
-            self._hw.movement_manager.stop()
+        if self._hw.motor is not None:
+            self._hw.motor.stop()
         logger.info("SessionManager: stop requested")
         return {"status": "stop_requested"}
 
@@ -82,130 +85,154 @@ class SessionManager:
 
     # ── internal ─────────────────────────────────────────────────────────────
 
-    def _on_zone_change(self, old_zone: str, new_zone: str, distance: float) -> None:
-        kind = "OBSTACLE" if new_zone == "close" else "ZONE_CHANGE"
-        self._bus.put(
-            BrainEvent(
-                kind=kind,
-                zone=new_zone,
-                distance_cm=distance,
-                extra={"old_zone": old_zone},
-            )
-        )
-
-    def _on_emergency_stop(self, distance: float) -> None:
-        self._bus.put(
-            BrainEvent(
-                kind="EMERGENCY_STOP",
-                zone="critical",
-                distance_cm=distance,
-            )
-        )
-
-    def drain_events(self) -> list[BrainEvent]:
-        drained: list[BrainEvent] = []
-        while True:
+    def _publish(self, payload: dict) -> None:
+        if self._publish_callback is not None:
             try:
-                drained.append(self._bus.get_nowait())
-            except queue.Empty:
-                return drained
+                self._publish_callback(payload)
+            except Exception as exc:
+                logger.warning(f"SessionManager: publish failed — {exc}")
 
     def _run(self, goal: str) -> None:
         session_id = "rambabu-rover"
         self._transcript = [f"GOAL: {goal}"]
-        self._publish({"status": "started", "goal": goal})
+        self._iteration = 0
+        self._prev_motor_moving = False
+        _start_time = time.monotonic()
+        nav_log = reset_nav_log()
+        reset_target_tracker()
 
         try:
+            self._publish({"status": "started", "goal": goal})
             while not self._stop_event.is_set():
-                events = self.drain_events()
-                msg = self._build_message(events, goal)
+                motor_was_moving = self._prev_motor_moving
+                motor_is_moving_now = _motor_is_moving(self._hw)
+                sonar_fired = motor_was_moving and not motor_is_moving_now
+                elapsed = time.monotonic() - _start_time
 
-                output = self._agent.run(msg, session_id=session_id)
+                msg = self._build_message(
+                    goal,
+                    iteration=self._iteration,
+                    elapsed_s=elapsed,
+                    motor_moving=motor_is_moving_now,
+                    sonar_fired=sonar_fired,
+                )
+                self._prev_motor_moving = motor_is_moving_now
 
-                text = output.content or ""
+                output = self._agent.run(
+                    msg, session_id=session_id, stream=True, stream_events=True
+                )
+
+                text = ""
+                if output is not None:
+                    try:
+                        for event in output:
+                            if hasattr(event, "content") and event.content:
+                                text += event.content
+                    except Exception as stream_exc:
+                        # CompressionManager or API errors mid-stream — log and
+                        # continue with whatever text we collected so far.
+                        # Do NOT crash the run; the agent may have issued tool
+                        # calls before the error and those are already executed.
+                        logger.warning(
+                            f"SessionManager: streaming error (continuing) — {stream_exc}"
+                        )
+
+                    if self._session_compactor:
+                        self._session_compactor.on_run_complete()
+
                 if text:
                     self._transcript.append(f"AGENT: {text}")
 
-                if self._session_compactor:
-                    self._session_compactor.on_run_complete()
+                self._prev_motor_moving = _motor_is_moving(self._hw)
+                self._iteration += 1
+                self._write_checkpoint(goal)
 
-                # Check if goal is complete (no tool calls + not moving)
-                if not self._has_tool_calls(output):
-                    moving = (
-                        self._hw.movement_manager is not None
-                        and self._hw.movement_manager.is_moving
+                # Complete only after ≥ 2 iterations, no tool calls, motor stopped
+                if (
+                    self._iteration >= 2
+                    and not self._has_tool_calls(output)
+                    and not _motor_is_moving(self._hw)
+                ):
+                    self._publish(
+                        {"status": "complete", "goal": goal, "result": text}
                     )
-                    if not moving:
-                        final = text
-                        self._publish(
-                            {"status": "complete", "goal": goal, "result": final}
-                        )
-                        logger.info(f"SessionManager: complete — {final[:100]}")
-                        if self._obs_memory:
-                            self._obs_memory.on_run_complete(
-                                goal, list(self._transcript)
-                            )
-                        return
-                    # Still moving but returned text — synthesize a GOAL_CHECK
-                    # and continue (loop will re-evaluate)
-                    if moving:
-                        goal = "GOAL_CHECK"
-
-                # If movement_manager is no longer moving due to safety stop,
-                # synthesize a SAFETY_HALT message
-                if self._hw.movement_manager is not None:
-                    snap = self._hw.movement_manager.snapshot()
-                    if (
-                        snap.get("is_moving") is False
-                        and self._hw.movement_manager.was_safety_stopped
-                    ):
-                        info = self._hw.movement_manager.safety_stop_info
-                        reason = (
-                            info.get("reason", "SAFETY_HALT") if info else "SAFETY_HALT"
-                        )
-                        dist = info.get("distance_cm") if info else None
-                        safety_msg = (
-                            f"EVENT: SAFETY_HALT reason={reason} "
-                            f"distance={dist:.0f}cm\n"
-                            "The motor is STOPPED. You MUST now call a tool."
-                        )
-                        self._agent.run(safety_msg, session_id=session_id)
-                        self._transcript.append("AGENT: [SAFETY_HALT triggered]")
+                    logger.info(f"SessionManager: complete — {text[:100]}")
+                    if self._obs_memory:
+                        nav_summary = nav_log.to_transcript_str()
+                        transcript = list(self._transcript)
+                        if nav_summary:
+                            transcript.append(nav_summary)
+                        self._obs_memory.on_run_complete(goal, transcript)
+                    return
 
         except Exception as exc:
             logger.error(f"SessionManager: error — {exc}")
             self._publish({"status": "error", "goal": goal, "message": str(exc)})
             if self._obs_memory:
-                self._obs_memory.on_run_complete(goal, list(self._transcript))
+                nav_summary = nav_log.to_transcript_str()
+                transcript = list(self._transcript)
+                if nav_summary:
+                    transcript.append(nav_summary)
+                self._obs_memory.on_run_complete(goal, transcript)
 
-    def _build_message(self, events: list[BrainEvent], current_goal: str) -> str:
+    def _write_checkpoint(self, goal: str) -> None:
+        try:
+            os.makedirs("sessions", exist_ok=True)
+            payload = {
+                "goal": goal,
+                "iteration": self._iteration,
+                "timestamp": time.time(),
+                "transcript": list(self._transcript),
+            }
+            tmp = "sessions/checkpoint.tmp"
+            with open(tmp, "w") as f:
+                json.dump(payload, f)
+            os.replace(tmp, "sessions/checkpoint.json")
+        except Exception as exc:
+            logger.warning(f"SessionManager: checkpoint write failed — {exc}")
+
+    def _build_message(
+        self,
+        goal: str,
+        iteration: int = 0,
+        elapsed_s: float = 0.0,
+        motor_moving: bool = False,
+        sonar_fired: bool = False,
+    ) -> str:
         parts = []
 
-        # Prepend persistent observations from previous sessions
-        if self._obs_memory and current_goal != "GOAL_CHECK":
+        if self._obs_memory:
             observations = self._obs_memory.get_observations()
             if observations:
                 parts.append(
                     f"PERSISTENT OBSERVATIONS (from previous sessions):\n{observations}"
                 )
 
-        if current_goal == "GOAL_CHECK":
-            snap = (
-                self._hw.movement_manager.snapshot()
-                if self._hw.movement_manager
-                else {}
-            )
+        parts.append(goal)
+
+        nav_str = get_nav_log().to_context_str()
+        if nav_str:
+            parts.append(nav_str)
+
+        target_str = get_target_tracker().to_context_str()
+        if target_str:
+            parts.append(target_str)
+
+        if iteration > 0:
+            motor_state = "running" if motor_moving else "stopped"
+            if sonar_fired:
+                motor_state = "auto-stopped by SonarGuard"
+
+            dist_str = ""
+            if self._hw.sonar_guard is not None and self._hw.sonar_guard.is_running:
+                dist_cm, zone = self._hw.sonar_guard.snapshot()
+                dist_str = f"Front: {dist_cm:.0f}cm ({zone}). "
+
             parts.append(
-                f"EVENT: GOAL_CHECK "
-                f"elapsed={snap.get('elapsed_s', 0):.1f}s "
-                f"estimated_distance={snap.get('estimated_distance_cm', 0):.0f}cm "
-                f"direction={snap.get('direction', 'unknown')}"
+                f"[Iteration {iteration} | Elapsed: {elapsed_s:.0f}s | "
+                f"Motor: {motor_state} | {dist_str}"
+                f"Continue working on the goal above.]"
             )
-        else:
-            if events:
-                parts.append("\n".join(ev.to_user_message() for ev in events))
-            if current_goal:
-                parts.append(current_goal)
 
         return "\n\n".join(parts)
 
@@ -213,4 +240,6 @@ class SessionManager:
     def _has_tool_calls(output) -> bool:
         if not output:
             return False
-        return bool(output.tools)
+        if hasattr(output, "tools"):
+            return bool(output.tools)
+        return False

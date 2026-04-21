@@ -242,14 +242,19 @@ class ObservationalMemory:
             return content.get("text", json.dumps(content, ensure_ascii=False))
         return str(content)
 
+    def _get_default_compress_model(self):
+        from agno.models.google import Gemini
+
+        return Gemini(id="gemini-2.5-flash-lite")
+
     def _save_learning(
         self,
         learning_type: str,
         content: dict[str, Any],
     ) -> None:
         try:
-            table = self._db._get_table(table_type="learnings")
-            with self._db.Session() as sess:
+            table = self._db._get_table(table_type="learnings", create_table_if_not_found=True)
+            with self._db.Session() as sess, sess.begin():
                 sess.execute(
                     table.insert().values(
                         learning_id=generate_id(),
@@ -268,8 +273,8 @@ class ObservationalMemory:
         if not learning_ids:
             return
         try:
-            table = self._db._get_table(table_type="learnings")
-            with self._db.Session() as sess:
+            table = self._db._get_table(table_type="learnings", create_table_if_not_found=True)
+            with self._db.Session() as sess, sess.begin():
                 sess.execute(
                     table.delete().where(table.c.learning_id.in_(learning_ids))
                 )
@@ -404,8 +409,8 @@ class SessionCompactor:
         if not text:
             return
         try:
-            table = self._db._get_table(table_type="learnings")
-            with self._db.Session() as sess:
+            table = self._db._get_table(table_type="learnings", create_table_if_not_found=True)
+            with self._db.Session() as sess, sess.begin():
                 sess.execute(
                     table.insert().values(
                         learning_id=generate_id(),
@@ -427,8 +432,8 @@ class SessionCompactor:
 
     def _trim_session(self, remaining_runs: list) -> None:
         try:
-            table = self._db._get_table(table_type="sessions")
-            with self._db.Session() as sess:
+            table = self._db._get_table(table_type="sessions", create_table_if_not_found=True)
+            with self._db.Session() as sess, sess.begin():
                 sess.execute(
                     table.update()
                     .where(table.c.session_id == self._session_id)

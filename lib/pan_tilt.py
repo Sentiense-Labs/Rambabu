@@ -281,6 +281,41 @@ class PanTilt:
         log_info(f"Tilt: {old}° → {clamped}°")
         return {"status": "ok", "tilt": self.tilt_angle}
 
+    def pan_snap(self, angle: int, settle_s: float = 0.15) -> dict:
+        """Jump pan to angle instantly without smooth sweep.
+
+        Skips the degree-by-degree sweep for speed. Intended for rapid
+        multi-shot sequences (e.g. visual_survey) where smooth motion is
+        unnecessary. The settle_s wait replaces config.SERVO_MOVE_DELAY —
+        tune it to the actual servo travel time for the hop distance.
+        """
+        self._stop_current_movement()
+        clamped = self._clamp(angle, config.PAN_MIN, config.PAN_MAX)
+        servo_angle = self._clamp(clamped + config.PAN_OFFSET, 0, 180)
+        self._write_servo(config.SERVO_PAN_CHANNEL, servo_angle)
+        time.sleep(settle_s)
+        self._kill_channel(config.SERVO_PAN_CHANNEL)
+        old, self.pan_angle = self.pan_angle, clamped
+        log_info(f"Pan snap: {old}° → {clamped}°")
+        return {"status": "ok", "pan": self.pan_angle}
+
+    def tilt_snap(self, angle: int, settle_s: float = 0.20) -> dict:
+        """Jump tilt to angle instantly without smooth sweep.
+
+        Same rationale as pan_snap — use for rapid multi-shot sequences.
+        Default settle_s is slightly longer than pan because the tilt servo
+        carries the camera weight and needs more margin.
+        """
+        self._stop_current_movement()
+        clamped = self._clamp(angle, config.TILT_MIN, config.TILT_MAX)
+        servo_angle = self._clamp(clamped + config.TILT_OFFSET, 0, 180)
+        self._write_servo(config.SERVO_TILT_CHANNEL, servo_angle)
+        time.sleep(settle_s)
+        self._kill_channel(config.SERVO_TILT_CHANNEL)
+        old, self.tilt_angle = self.tilt_angle, clamped
+        log_info(f"Tilt snap: {old}° → {clamped}°")
+        return {"status": "ok", "tilt": self.tilt_angle}
+
     # ── Relative step moves ────────────────────────────────────────────────
 
     def pan_left(self, deg: int = 10) -> dict:
